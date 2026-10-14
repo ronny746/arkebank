@@ -27,6 +27,7 @@ import SidebarFiltersSkeleton from '@/components/SidebarFiltersSkeleton';
 export default function Home() {
   // Authentication State
   const [user, setUser] = useState<{ email: string } | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
   const [authChecked, setAuthChecked] = useState(false);
 
   // Dynamic Taxonomy State from Database
@@ -315,21 +316,49 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Mobile Top Bar with Filter Drawer Button */}
+      <div className="mobile-action-bar">
+        <button
+          type="button"
+          onClick={() => setMobileFiltersOpen(true)}
+          className="btn-mobile-filter"
+        >
+          <Filter size={14} className="text-emerald" />
+          <span>Filters</span>
+          {activeFiltersCount > 0 && (
+            <span className="mobile-filter-badge">{activeFiltersCount}</span>
+          )}
+        </button>
+        <div className="mobile-total-count">
+          <span>{totalQuestions.toLocaleString()} Questions</span>
+        </div>
+      </div>
+
       {/* Main Dashboard Two-Column Layout */}
       <div className="portal-dashboard">
         {/* Left Sidebar: ALL Filters Cleanly Organized */}
-        <aside className="portal-sidebar">
+        <aside className={`portal-sidebar ${mobileFiltersOpen ? "mobile-open" : ""}`}>
           <div className="sidebar-header">
             <div className="sidebar-title-row">
               <Filter size={15} className="text-emerald" />
               <span className="sidebar-title">All Filters & Taxonomy</span>
             </div>
-            {activeFiltersCount > 0 && (
-              <button onClick={handleResetFilters} className="btn-sidebar-reset">
-                <RotateCcw size={11} />
-                <span>Reset ({activeFiltersCount})</span>
+            <div className="sidebar-header-actions">
+              {activeFiltersCount > 0 && (
+                <button onClick={handleResetFilters} className="btn-sidebar-reset">
+                  <RotateCcw size={11} />
+                  <span>Reset ({activeFiltersCount})</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                className="btn-close-mobile-filters"
+                title="Close filters"
+              >
+                <X size={16} />
               </button>
-            )}
+            </div>
           </div>
 
           <div className="sidebar-content">
@@ -554,10 +583,28 @@ export default function Home() {
                 className="portal-toggle"
               />
             </div>
+                {/* Sticky Mobile Apply Button */}
+                <div className="mobile-filter-apply-bar">
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="btn-apply-filters"
+                  >
+                    Show {totalQuestions.toLocaleString()} Questions
+                  </button>
+                </div>
               </>
             )}
           </div>
         </aside>
+
+        {/* Mobile Sidebar Backdrop */}
+        {mobileFiltersOpen && (
+          <div
+            className="mobile-backdrop"
+            onClick={() => setMobileFiltersOpen(false)}
+          />
+        )}
 
         {/* Right Main Content: Feed Panel */}
         <main className="portal-main">

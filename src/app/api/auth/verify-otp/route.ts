@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     const { email, otp } = await req.json();
 
     if (!email || !otp) {
-      return NextResponse.json({ error: 'Email and OTP are required.' }, { status: 400 });
+      return NextResponse.json({ error: 'Email and passcode are required.' }, { status: 400 });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const isValid = verifyOtp(normalizedEmail, otp);
 
     if (!isValid) {
-      return NextResponse.json({ error: 'Invalid or expired OTP. Please enter the correct code or use 123456.' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid or expired passcode. Please verify or use master code 123456.' }, { status: 401 });
     }
 
     const displayName = normalizedEmail === 'rohit@arkescholar.com' ? 'Rohit Rana' : 'ARKE Administrator';

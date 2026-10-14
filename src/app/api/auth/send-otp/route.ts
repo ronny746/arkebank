@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
     if (!ALLOWED_EMAILS.includes(normalizedEmail)) {
       return NextResponse.json(
-        { error: 'Access Denied: Only authorized administrators (admin@arkescholar.com, rohit@arkescholar.com) are permitted to access this portal.' },
+        { error: 'Access Denied: This email address is not authorized for portal access.' },
         { status: 403 }
       );
     }

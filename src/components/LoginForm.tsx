@@ -32,7 +32,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     }
 
     if (!ALLOWED_EMAILS.includes(cleanEmail)) {
-      setError('Access Restricted: Only admin@arkescholar.com and rohit@arkescholar.com are authorized.');
+      setError('Access Denied: This email address is not authorized for portal access.');
       return;
     }
 
@@ -102,8 +102,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               <Image
                 src="/logo.png"
                 alt="ARKE SCHOLARS Logo"
-                width={38}
-                height={38}
+                width={36}
+                height={36}
                 priority
                 style={{ objectFit: 'contain' }}
               />
@@ -113,9 +113,9 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               </div>
             </div>
           </div>
-          <h2 className="login-title">Administrative Access Portal</h2>
+          <h2 className="login-title">Scholar & Faculty Gateway</h2>
           <p className="login-subtitle">
-            Strictly restricted to verified ARKE SCHOLARS administrators for 5,27,000+ standardized questions.
+            Secure authentication to explore 5,27,000+ standardized questions, solutions, and diagrams.
           </p>
         </div>
 
@@ -136,56 +136,19 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         {step === 'email' ? (
           <form onSubmit={handleSendOtp} className="login-form">
             <div className="form-group">
-              <label htmlFor="email" className="form-label">Authorized Administrator Email</label>
+              <label htmlFor="email" className="form-label">Institutional or Faculty Email</label>
               <div className="input-group">
                 <Mail className="input-icon" size={18} />
                 <input
                   id="email"
                   type="email"
                   required
-                  placeholder="admin@arkescholar.com or rohit@arkescholar.com"
+                  placeholder="name@institution.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="form-input"
                   autoFocus
                 />
-              </div>
-
-              {/* Quick Select Quick Chips */}
-              <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.45rem', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Authorized:</span>
-                <button
-                  type="button"
-                  onClick={() => setEmail('admin@arkescholar.com')}
-                  style={{
-                    fontSize: '0.72rem',
-                    padding: '0.18rem 0.5rem',
-                    borderRadius: '4px',
-                    border: '1px solid var(--card-border)',
-                    background: '#F8FAFC',
-                    cursor: 'pointer',
-                    color: 'var(--primary-navy)',
-                    fontWeight: 600
-                  }}
-                >
-                  admin@arkescholar.com
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmail('rohit@arkescholar.com')}
-                  style={{
-                    fontSize: '0.72rem',
-                    padding: '0.18rem 0.5rem',
-                    borderRadius: '4px',
-                    border: '1px solid var(--card-border)',
-                    background: '#F8FAFC',
-                    cursor: 'pointer',
-                    color: 'var(--primary-navy)',
-                    fontWeight: 600
-                  }}
-                >
-                  rohit@arkescholar.com
-                </button>
               </div>
             </div>
 
@@ -193,7 +156,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               {loading ? (
                 <>
                   <RefreshCw className="spin-icon" size={18} />
-                  <span>Verifying Authorization...</span>
+                  <span>Verifying Credentials...</span>
                 </>
               ) : (
                 <>
@@ -274,7 +237,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         <div className="login-footer">
           <div className="security-badge">
             <Lock size={13} className="text-emerald" />
-            <span>Encrypted Dual-Admin Token Authentication</span>
+            <span>Encrypted Token-Based Scholar Authentication</span>
           </div>
         </div>
       </div>
