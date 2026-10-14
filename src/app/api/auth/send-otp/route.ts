@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { saveOtp } from '@/lib/otp-store';
 
+const ALLOWED_EMAILS = ['admin@arkescholar.com', 'rohit@arkescholar.com'];
+
 export async function POST(req: Request) {
   try {
     const { email } = await req.json();
@@ -9,15 +11,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
+    if (!ALLOWED_EMAILS.includes(normalizedEmail)) {
+      return NextResponse.json(
+        { error: 'Access Denied: Only authorized administrators (admin@arkescholar.com, rohit@arkescholar.com) are permitted to access this portal.' },
+        { status: 403 }
+      );
+    }
+
     // Generate 6-digit cryptographically random OTP
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    saveOtp(email, generatedOtp, 600); // 10 minutes expiry
+    saveOtp(normalizedEmail, generatedOtp, 600); // 10 minutes expiry
 
-    console.log(`[AUTH] OTP generated for ${email}: ${generatedOtp}`);
+    console.log(`[AUTH] Secure OTP generated for ${normalizedEmail}: ${generatedOtp}`);
 
     return NextResponse.json({
       success: true,
-      message: `OTP sent successfully to ${email}.`,
+      message: `Security code sent to ${normalizedEmail}.`,
       demoOtp: generatedOtp // Provided on screen for immediate testing
     });
   } catch (error: any) {

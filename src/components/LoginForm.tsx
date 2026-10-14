@@ -2,11 +2,13 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Mail, KeyRound, ShieldCheck, ArrowRight, RefreshCw, CheckCircle, Sparkles, Lock } from 'lucide-react';
+import { Mail, KeyRound, ShieldCheck, ArrowRight, RefreshCw, CheckCircle, Sparkles, Lock, ShieldAlert } from 'lucide-react';
 
 interface LoginFormProps {
   onSuccess: (user: any) => void;
 }
+
+const ALLOWED_EMAILS = ['admin@arkescholar.com', 'rohit@arkescholar.com'];
 
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email');
@@ -22,8 +24,15 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setError(null);
     setSuccessMsg(null);
 
-    if (!email || !email.includes('@')) {
-      setError('Please enter a valid academic or faculty email address');
+    const cleanEmail = email.toLowerCase().trim();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    if (!ALLOWED_EMAILS.includes(cleanEmail)) {
+      setError('Access Restricted: Only admin@arkescholar.com and rohit@arkescholar.com are authorized.');
       return;
     }
 
@@ -32,7 +41,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       const res = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: cleanEmail })
       });
       const data = await res.json();
 
@@ -41,7 +50,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       }
 
       setDemoOtp(data.demoOtp);
-      setSuccessMsg(`Verification passcode sent to ${email}`);
+      setSuccessMsg(`Security passcode sent to ${cleanEmail}`);
       setStep('otp');
     } catch (err: any) {
       setError(err.message);
@@ -54,6 +63,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     e.preventDefault();
     setError(null);
 
+    const cleanEmail = email.toLowerCase().trim();
+
     if (!otp || otp.length < 4) {
       setError('Please enter the 6-digit verification passcode');
       return;
@@ -64,12 +75,12 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp })
+        body: JSON.stringify({ email: cleanEmail, otp })
       });
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Invalid passcode. Please verify or use master code 123456');
+        throw new Error(data.error || 'Invalid passcode. Please enter the correct code or use 123456');
       }
 
       localStorage.setItem('arke_user', JSON.stringify(data.user));
@@ -91,8 +102,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               <Image
                 src="/logo.png"
                 alt="ARKE SCHOLARS Logo"
-                width={40}
-                height={40}
+                width={38}
+                height={38}
                 priority
                 style={{ objectFit: 'contain' }}
               />
@@ -102,21 +113,22 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               </div>
             </div>
           </div>
-          <h2 className="login-title">Scholar & Faculty Gateway</h2>
+          <h2 className="login-title">Administrative Access Portal</h2>
           <p className="login-subtitle">
-            Protected institutional portal for 5,27,000+ standardized questions, solutions, and diagrams.
+            Strictly restricted to verified ARKE SCHOLARS administrators for 5,27,000+ standardized questions.
           </p>
         </div>
 
         {error && (
           <div className="alert-box alert-error">
+            <ShieldAlert size={16} className="flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {successMsg && (
           <div className="alert-box alert-success">
-            <CheckCircle size={16} />
+            <CheckCircle size={16} className="flex-shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
@@ -124,19 +136,56 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         {step === 'email' ? (
           <form onSubmit={handleSendOtp} className="login-form">
             <div className="form-group">
-              <label htmlFor="email" className="form-label">Institutional or Faculty Email</label>
+              <label htmlFor="email" className="form-label">Authorized Administrator Email</label>
               <div className="input-group">
                 <Mail className="input-icon" size={18} />
                 <input
                   id="email"
                   type="email"
                   required
-                  placeholder="faculty@arkescholars.com or name@school.edu"
+                  placeholder="admin@arkescholar.com or rohit@arkescholar.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="form-input"
                   autoFocus
                 />
+              </div>
+
+              {/* Quick Select Quick Chips */}
+              <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.45rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Authorized:</span>
+                <button
+                  type="button"
+                  onClick={() => setEmail('admin@arkescholar.com')}
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '0.18rem 0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid var(--card-border)',
+                    background: '#F8FAFC',
+                    cursor: 'pointer',
+                    color: 'var(--primary-navy)',
+                    fontWeight: 600
+                  }}
+                >
+                  admin@arkescholar.com
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmail('rohit@arkescholar.com')}
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '0.18rem 0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid var(--card-border)',
+                    background: '#F8FAFC',
+                    cursor: 'pointer',
+                    color: 'var(--primary-navy)',
+                    fontWeight: 600
+                  }}
+                >
+                  rohit@arkescholar.com
+                </button>
               </div>
             </div>
 
@@ -144,7 +193,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               {loading ? (
                 <>
                   <RefreshCw className="spin-icon" size={18} />
-                  <span>Generating Secure Passcode...</span>
+                  <span>Verifying Authorization...</span>
                 </>
               ) : (
                 <>
@@ -156,15 +205,15 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="login-form">
-            {/* Demo Helper Toast */}
+            {/* Passcode Display Box */}
             {demoOtp && (
               <div className="demo-otp-banner">
                 <div className="demo-otp-header">
                   <Sparkles size={16} className="text-emerald" />
-                  <span>Your One-Time Passcode (OTP):</span>
+                  <span>One-Time Security Passcode:</span>
                 </div>
                 <div className="demo-otp-code">{demoOtp}</div>
-                <small className="demo-otp-hint">You can also use master passcode: <b>123456</b></small>
+                <small className="demo-otp-hint">Backup master code: <b>123456</b></small>
               </div>
             )}
 
@@ -199,12 +248,12 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               {loading ? (
                 <>
                   <RefreshCw className="spin-icon" size={18} />
-                  <span>Validating Credentials...</span>
+                  <span>Validating Passcode...</span>
                 </>
               ) : (
                 <>
                   <ShieldCheck size={18} />
-                  <span>Verify & Unlock Question Bank</span>
+                  <span>Unlock Question Bank</span>
                 </>
               )}
             </button>
@@ -225,7 +274,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         <div className="login-footer">
           <div className="security-badge">
             <Lock size={13} className="text-emerald" />
-            <span>Encrypted Token-Based Scholar Authentication</span>
+            <span>Encrypted Dual-Admin Token Authentication</span>
           </div>
         </div>
       </div>
