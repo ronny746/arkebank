@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Mail, KeyRound, ShieldCheck, ArrowRight, RefreshCw, CheckCircle, Sparkles } from 'lucide-react';
+import { Mail, KeyRound, ShieldCheck, ArrowRight, RefreshCw, CheckCircle, Sparkles, Lock } from 'lucide-react';
 
 interface LoginFormProps {
   onSuccess: (user: any) => void;
@@ -23,7 +23,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setSuccessMsg(null);
 
     if (!email || !email.includes('@')) {
-      setError('Please enter a valid email address');
+      setError('Please enter a valid academic or faculty email address');
       return;
     }
 
@@ -37,11 +37,11 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to send OTP');
+        throw new Error(data.error || 'Failed to send verification code');
       }
 
       setDemoOtp(data.demoOtp);
-      setSuccessMsg(`OTP code sent to ${email}`);
+      setSuccessMsg(`Verification passcode sent to ${email}`);
       setStep('otp');
     } catch (err: any) {
       setError(err.message);
@@ -55,7 +55,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setError(null);
 
     if (!otp || otp.length < 4) {
-      setError('Please enter the 6-digit OTP');
+      setError('Please enter the 6-digit verification passcode');
       return;
     }
 
@@ -69,7 +69,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Invalid OTP');
+        throw new Error(data.error || 'Invalid passcode. Please verify or use master code 123456');
       }
 
       localStorage.setItem('arke_user', JSON.stringify(data.user));
@@ -87,18 +87,24 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         {/* Brand Header */}
         <div className="login-header">
           <div className="logo-wrapper">
-            <Image
-              src="/logo.png"
-              alt="ARKE SCHOLARS Logo"
-              width={220}
-              height={80}
-              priority
-              style={{ objectFit: 'contain', width: 'auto', height: '65px' }}
-            />
+            <div className="login-brand-pill">
+              <Image
+                src="/logo.png"
+                alt="ARKE SCHOLARS Logo"
+                width={40}
+                height={40}
+                priority
+                style={{ objectFit: 'contain' }}
+              />
+              <div className="login-brand-meta">
+                <span className="login-brand-title">ARKE SCHOLARS</span>
+                <span className="login-brand-sub">Assessment Intelligence</span>
+              </div>
+            </div>
           </div>
-          <h2 className="login-title">Assessment Intelligence Portal</h2>
+          <h2 className="login-title">Scholar & Faculty Gateway</h2>
           <p className="login-subtitle">
-            Secure login to explore 5,27,000+ standardized questions, solutions, and diagrams.
+            Protected institutional portal for 5,27,000+ standardized questions, solutions, and diagrams.
           </p>
         </div>
 
@@ -118,14 +124,14 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         {step === 'email' ? (
           <form onSubmit={handleSendOtp} className="login-form">
             <div className="form-group">
-              <label htmlFor="email" className="form-label">Work or Academic Email</label>
+              <label htmlFor="email" className="form-label">Institutional or Faculty Email</label>
               <div className="input-group">
                 <Mail className="input-icon" size={18} />
                 <input
                   id="email"
                   type="email"
                   required
-                  placeholder="name@school.edu or name@arkescholars.com"
+                  placeholder="faculty@arkescholars.com or name@school.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="form-input"
@@ -138,7 +144,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               {loading ? (
                 <>
                   <RefreshCw className="spin-icon" size={18} />
-                  <span>Sending Verification Code...</span>
+                  <span>Generating Secure Passcode...</span>
                 </>
               ) : (
                 <>
@@ -158,13 +164,13 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                   <span>Your One-Time Passcode (OTP):</span>
                 </div>
                 <div className="demo-otp-code">{demoOtp}</div>
-                <small className="demo-otp-hint">You can also use master demo OTP: <b>123456</b></small>
+                <small className="demo-otp-hint">You can also use master passcode: <b>123456</b></small>
               </div>
             )}
 
             <div className="form-group">
               <div className="flex-between">
-                <label htmlFor="otp" className="form-label">Enter 6-Digit OTP</label>
+                <label htmlFor="otp" className="form-label">Enter 6-Digit Passcode</label>
                 <button
                   type="button"
                   onClick={() => { setStep('email'); setError(null); }}
@@ -193,12 +199,12 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
               {loading ? (
                 <>
                   <RefreshCw className="spin-icon" size={18} />
-                  <span>Verifying Credentials...</span>
+                  <span>Validating Credentials...</span>
                 </>
               ) : (
                 <>
                   <ShieldCheck size={18} />
-                  <span>Verify & Access Question Bank</span>
+                  <span>Verify & Unlock Question Bank</span>
                 </>
               )}
             </button>
@@ -210,7 +216,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                 disabled={loading}
                 className="btn-secondary-link"
               >
-                Didn't receive code? Resend OTP
+                Didn't receive passcode? Resend
               </button>
             </div>
           </form>
@@ -218,7 +224,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
 
         <div className="login-footer">
           <div className="security-badge">
-            <ShieldCheck size={14} className="text-navy" />
+            <Lock size={13} className="text-emerald" />
             <span>Encrypted Token-Based Scholar Authentication</span>
           </div>
         </div>
