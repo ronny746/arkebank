@@ -26,7 +26,8 @@ import SidebarFiltersSkeleton from '@/components/SidebarFiltersSkeleton';
 
 export default function Home() {
   // Authentication State
-  const [user, setUser] = useState<{ email: string } | null>(null);
+  const [user, setUser] = useState<{ email: string } | null>({ email: 'faculty@arkescholars.com' });
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [authChecked, setAuthChecked] = useState(false);
 
   // Dynamic Taxonomy State from Database
@@ -76,13 +77,16 @@ export default function Home() {
       } catch (e) {
         localStorage.removeItem('arke_user');
       }
+    } else {
+      setUser({ email: 'faculty@arkescholars.com' });
     }
     setAuthChecked(true);
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('arke_user');
-    setUser(null);
+    setUser({ email: 'guest@arkescholars.com' });
+    showToast('Switched to Guest Faculty session.');
   };
 
   const showToast = (msg: string) => {
@@ -228,9 +232,8 @@ export default function Home() {
     );
   }
 
-  if (!user) {
-    return <LoginForm onSuccess={(u: any) => setUser(u)} />;
-  }
+  // Direct unblocked access to Question Bank portal
+  // (Optional modal rendered at bottom if user explicitly opens it)
 
   return (
     <div className="portal-wrapper">
@@ -292,20 +295,25 @@ export default function Home() {
 
         {/* User Session */}
         <div className="header-right">
-          <div className="user-profile-badge">
-            <div className="user-avatar-circle">{user.email[0].toUpperCase()}</div>
+          <div 
+            className="user-profile-badge" 
+            style={{ cursor: "pointer" }} 
+            onClick={() => setShowLoginModal(true)}
+            title="Click to switch scholar account"
+          >
+            <div className="user-avatar-circle">{user?.email ? user.email[0].toUpperCase() : "F"}</div>
             <div className="user-info-text">
-              <span className="user-email-text">{user.email}</span>
+              <span className="user-email-text">{user?.email || "faculty@arkescholars.com"}</span>
               <span className="user-role-text">Faculty Reviewer</span>
             </div>
           </div>
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLoginModal(true)}
             className="btn-logout"
-            title="Sign out of portal"
+            title="Switch or Sign In with scholar account"
           >
             <LogOut size={14} />
-            <span className="hide-mobile">Sign Out</span>
+            <span className="hide-mobile">Account</span>
           </button>
         </div>
       </header>
@@ -763,6 +771,28 @@ export default function Home() {
         availableClasses={classesList}
         availableSubjects={subjectsList}
       />
+
+      {/* Scholar Account / Login Modal */}
+      {showLoginModal && (
+        <div className="modal-backdrop" onClick={() => setShowLoginModal(false)}>
+          <div className="login-modal-wrapper" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowLoginModal(false)}
+              className="modal-close-btn"
+              style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 10 }}
+            >
+              <X size={18} />
+            </button>
+            <LoginForm
+              onSuccess={(u: any) => {
+                setUser(u);
+                setShowLoginModal(false);
+                showToast(`Signed in as ${u.email}`);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
