@@ -6,7 +6,6 @@ import {
   ChevronDown, 
   ChevronUp, 
   ZoomIn, 
-  Tags, 
   Calendar, 
   Award, 
   Layers, 
@@ -20,7 +19,7 @@ interface QuestionCardProps {
   question: any;
   index: number;
   onImageZoom: (url: string, title?: string) => void;
-  onInspectTags: (question: any) => void;
+  onInspectTags?: (question: any) => void;
   onEditTags: (question: any) => void;
 }
 
@@ -105,15 +104,7 @@ export default function QuestionCard({
             <Pencil size={12} />
             <span>Edit Question</span>
           </button>
-          <button
-            type="button"
-            onClick={() => onInspectTags(q)}
-            className="btn-card-action btn-inspect-tag"
-            title="Inspect 35 database fields in JSON"
-          >
-            <Tags size={12} />
-            <span>JSON</span>
-          </button>
+
         </div>
       </div>
 

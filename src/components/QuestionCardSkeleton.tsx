@@ -17,7 +17,6 @@ export default function QuestionCardSkeleton() {
         <div className="skeleton-right-actions">
           <div className="shimmer-element skeleton-id-pill"></div>
           <div className="shimmer-element skeleton-action-btn"></div>
-          <div className="shimmer-element skeleton-action-btn"></div>
         </div>
       </div>
 
