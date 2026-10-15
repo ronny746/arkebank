@@ -1,8 +1,21 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
+import { extractAndVerifyToken } from '@/lib/auth-token';
 
 export async function GET(req: Request) {
   try {
+    // 1. Strict Token Verification: Block unauthenticated access to taxonomy & counts
+    const authUser = extractAndVerifyToken(req);
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Access Denied: Valid administrator authentication token is required.',
+        },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const class_std = searchParams.get('class_std');
     const subject = searchParams.get('subject');

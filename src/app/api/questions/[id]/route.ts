@@ -1,11 +1,24 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
+import { extractAndVerifyToken } from '@/lib/auth-token';
 
 export async function PATCH(
   req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 1. Strict Token Verification: Only authenticated admins can modify questions
+    const authUser = extractAndVerifyToken(req);
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Access Denied: Valid administrator authentication token is required to edit questions.',
+        },
+        { status: 401 }
+      );
+    }
+
     const { id } = await context.params;
     const body = await req.json();
 

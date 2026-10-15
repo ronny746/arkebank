@@ -83,6 +83,9 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         throw new Error(data.error || 'Invalid passcode. Please enter the correct code or use 123456');
       }
 
+      if (data.token) {
+        localStorage.setItem('arke_token', data.token);
+      }
       localStorage.setItem('arke_user', JSON.stringify(data.user));
       onSuccess(data.user);
     } catch (err: any) {

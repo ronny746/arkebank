@@ -86,6 +86,8 @@ export default function Home() {
 
   const handleLogout = () => {
     localStorage.removeItem('arke_user');
+    localStorage.removeItem('arke_token');
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
     setUser(null);
     showToast('Signed out of portal.');
   };
@@ -105,7 +107,20 @@ export default function Home() {
       if (currentSubject !== 'all') params.set('subject', currentSubject);
       if (currentTopic !== 'all') params.set('topic', currentTopic);
 
-      const res = await fetch(`/api/filters?${params.toString()}`);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('arke_token') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/filters?${params.toString()}`, {
+        headers,
+        credentials: 'include',
+      });
+
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
+
       const data = await res.json();
 
       if (data.classes) setClassesList(data.classes);
@@ -152,7 +167,20 @@ export default function Home() {
       if (hasImageOnly) params.set('has_image', 'true');
       if (searchQuery.trim()) params.set('search', searchQuery.trim());
 
-      const res = await fetch(`/api/questions?${params.toString()}`);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('arke_token') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/questions?${params.toString()}`, {
+        headers,
+        credentials: 'include',
+      });
+
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
+
       const data = await res.json();
 
       if (!res.ok || !data.success) {

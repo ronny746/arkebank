@@ -1,8 +1,21 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
+import { extractAndVerifyToken } from '@/lib/auth-token';
 
 export async function GET(req: Request) {
   try {
+    // 1. Strict Token Verification: Block unauthenticated scraping/direct access
+    const authUser = extractAndVerifyToken(req);
+    if (!authUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Access Denied: Valid administrator authentication token is required. Direct API access is strictly forbidden.',
+        },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
 
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));

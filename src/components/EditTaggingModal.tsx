@@ -74,9 +74,14 @@ export default function EditTaggingModal({
         { key: 'd', text: formData.opt_d, image: existingOpts[3]?.image || '' },
       ];
 
+      const token = typeof window !== 'undefined' ? localStorage.getItem('arke_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`/api/questions/${qId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({
           class_std: formData.class_std,
           subject: formData.subject,
