@@ -6071,3 +6071,55 @@ body {
   border-color: var(--brand-emerald);
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
+
+/* EXAM DELETION STYLES */
+.exam-delete-btn {
+  background: #FFF1F2 !important;
+  border: 1px solid #FECDD3 !important;
+  color: #E11D48 !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.exam-delete-btn:hover {
+  background: #FFE4E6 !important;
+  border-color: #FDA4AF !important;
+  color: #BE123C !important;
+}
+
+.exam-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-del-exam-card {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  padding: 5px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-del-exam-card:hover {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+div.exam-list-card {
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}

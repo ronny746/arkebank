@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Activity, ArrowLeft, BarChart3, CheckCircle2, Clock3, Copy, Download, Radio, RefreshCw, ShieldAlert, Users, ExternalLink, Globe } from 'lucide-react';
+import { Activity, ArrowLeft, BarChart3, CheckCircle2, Clock3, Copy, Download, Radio, RefreshCw, ShieldAlert, Users, ExternalLink, Globe, Trash2 } from 'lucide-react';
 import { getPublicExamUrl } from '@/lib/public-url';
 import type { OnlineExam } from '@/types/exam';
 
@@ -65,6 +65,31 @@ export default function ExamManagementView({ onBack, showToast }: { onBack: () =
     return () => window.clearInterval(refresh);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
+  const deleteExam = async (examId: string, examTitle?: string) => {
+    if (!confirm(`Are you sure you want to delete "${examTitle || 'this exam'}"? All candidate responses will also be removed.`)) return;
+
+    try {
+      const res = await fetch(`/api/exams/${examId}`, {
+        method: 'DELETE',
+        headers: headers(),
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete exam');
+      }
+
+      setExams(prev => prev.filter(e => e.id !== examId && e.slug !== examId));
+      if (active && (active.id === examId || active.slug === examId)) {
+        setActive(null);
+        setDetail(null);
+      }
+      showToast('Exam deleted successfully.');
+    } catch (err: any) {
+      showToast(err.message || 'Could not delete exam.');
+    }
+  };
+
   const copy = async (slug: string) => {
     const liveUrl = getPublicExamUrl(slug);
     await navigator.clipboard.writeText(liveUrl);
@@ -77,7 +102,7 @@ export default function ExamManagementView({ onBack, showToast }: { onBack: () =
       <button className="workspace-back" onClick={() => { setActive(null); setDetail(null); }}><ArrowLeft size={16}/> All exams</button>
       <div className="exam-console-heading">
         <div><span className="dashboard-eyebrow">LIVE EXAM CONTROL</span><h1>{active.title}</h1><p>{active.paper.class_std} · {active.paper.subject} · {active.questionCount} questions · refreshes every 10 seconds</p></div>
-        <div className="console-head-actions"><button className="workspace-back" onClick={() => void loadDetail(active)}><RefreshCw size={15}/> Refresh now</button><button className="exam-copy-link" onClick={() => void copy(active.slug)}><Copy size={15}/> Copy student link</button><a className="exam-open-link" href={getPublicExamUrl(active.slug)} target="_blank" rel="noreferrer" title="Open live student test page"><ExternalLink size={15}/> Open live test</a></div>
+        <div className="console-head-actions"><button className="workspace-back" onClick={() => void loadDetail(active)}><RefreshCw size={15}/> Refresh now</button><button className="exam-copy-link" onClick={() => void copy(active.slug)}><Copy size={15}/> Copy student link</button><a className="exam-open-link" href={getPublicExamUrl(active.slug)} target="_blank" rel="noreferrer" title="Open live student test page"><ExternalLink size={15}/> Open live test</a><button className="exam-delete-btn" onClick={() => void deleteExam(active.id, active.title)} title="Delete exam"><Trash2 size={15}/> Delete exam</button></div>
       </div>
       {!detail ? <p className="console-loading">Loading exam control room…</p> : <>
         <section className="exam-live-stats">
@@ -89,5 +114,5 @@ export default function ExamManagementView({ onBack, showToast }: { onBack: () =
     </main>;
   }
 
-  return <main className="exam-console"><div className="exam-console-heading"><div><span className="dashboard-eyebrow">ASSESSMENT DELIVERY</span><h1>Exams & live tracking</h1><p>Publish student links, monitor every live attempt and review outcomes in one place.</p></div><div className="console-head-actions"><button className="workspace-back" onClick={onBack}><ArrowLeft size={16}/> Dashboard</button><button className="exam-copy-link" onClick={() => void load()}><RefreshCw size={15}/> Refresh</button></div></div>{loading ? <p className="console-loading">Loading examinations…</p> : exams.length === 0 ? <div className="exam-empty">No exams yet. Generate a paper, then choose “Create Exam” to publish its student link.</div> : <section className="exam-list-grid">{exams.map(exam => <button key={exam.id} onClick={() => void open(exam)} className="exam-list-card"><header><span className={exam.liveCount ? 'live-badge' : 'exam-state'}>{exam.liveCount ? `${exam.liveCount} live` : exam.status}</span><span>{new Date(exam.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span></header><h2>{exam.title}</h2><p>{exam.paper.class_std} · {exam.paper.subject} · {exam.questionCount} questions</p><div className="exam-card-counts"><span><Users/> {exam.attemptCount} attempts</span><span><Radio/> {exam.liveCount} live</span><span><Clock3/> {exam.durationMinutes} min</span></div><footer><span>Open tracking & results</span><BarChart3 size={16}/></footer></button>)}</section>}</main>;
+  return <main className="exam-console"><div className="exam-console-heading"><div><span className="dashboard-eyebrow">ASSESSMENT DELIVERY</span><h1>Exams & live tracking</h1><p>Publish student links, monitor every live attempt and review outcomes in one place.</p></div><div className="console-head-actions"><button className="workspace-back" onClick={onBack}><ArrowLeft size={16}/> Dashboard</button><button className="exam-copy-link" onClick={() => void load()}><RefreshCw size={15}/> Refresh</button></div></div>{loading ? <p className="console-loading">Loading examinations…</p> : exams.length === 0 ? <div className="exam-empty">No exams yet. Generate a paper, then choose “Create Exam” to publish its student link.</div> : <section className="exam-list-grid">{exams.map(exam => <div key={exam.id} className="exam-list-card" onClick={() => void open(exam)}><header><span className={exam.liveCount ? 'live-badge' : 'exam-state'}>{exam.liveCount ? `${exam.liveCount} live` : exam.status}</span><div className="exam-card-header-right"><span>{new Date(exam.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span><button type="button" onClick={(e) => { e.stopPropagation(); void deleteExam(exam.id, exam.title); }} className="btn-del-exam-card" title="Delete exam"><Trash2 size={14}/></button></div></header><h2>{exam.title}</h2><p>{exam.paper.class_std} · {exam.paper.subject} · {exam.questionCount} questions</p><div className="exam-card-counts"><span><Users/> {exam.attemptCount} attempts</span><span><Radio/> {exam.liveCount} live</span><span><Clock3/> {exam.durationMinutes} min</span></div><footer><span>Open tracking & results</span><BarChart3 size={16}/></footer></div>)}</section>}</main>;
 }
