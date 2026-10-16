@@ -6015,3 +6015,59 @@ body {
   color: #0F172A;
   border-color: #94A3B8;
 }
+
+/* NTA NUMERICAL / SUBJECTIVE ANSWER STYLES */
+.nta-numerical-box {
+  padding: 18px 24px;
+  margin: 12px 22px 28px;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 12px;
+}
+
+@media (min-width: 761px) {
+  .nta-numerical-box {
+    margin: 14px 38px 28px;
+    padding: 22px 28px;
+  }
+}
+
+.nta-numerical-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--primary-navy);
+}
+
+.nta-numerical-sub {
+  font-size: 0.84rem;
+  color: #64748B;
+  margin: 8px 0 16px;
+  line-height: 1.5;
+}
+
+.nta-numerical-input-wrap {
+  display: flex;
+  width: 100%;
+}
+
+.nta-numerical-input {
+  width: 100%;
+  max-width: 600px;
+  padding: 14px 18px;
+  font-size: 1.05rem;
+  border: 2px solid #CBD5E1;
+  border-radius: 10px;
+  outline: none;
+  background: #FFFFFF;
+  color: #0F172A;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.nta-numerical-input:focus {
+  border-color: var(--brand-emerald);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+}

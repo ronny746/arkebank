@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       lang = 'all',
       hasImageOnly = false,
       pyqOnly = false,
+      mcqOnly = true,
       marksPerQuestion = 4,
       negativeMarks = 1,
     } = body;
@@ -72,6 +73,9 @@ export async function POST(req: Request) {
     }
     if (pyqOnly) {
       baseMatch.year = { $gt: 1990 };
+    }
+    if (mcqOnly !== false) {
+      baseMatch['options.0.text'] = { $exists: true, $ne: '' };
     }
 
     const { db } = await connectToDatabase();
