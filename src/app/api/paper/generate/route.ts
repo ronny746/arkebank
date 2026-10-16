@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     const {
       class_std = 'all',
       subject = 'all',
+      subjects = [],
       topics = [],
       totalQuestions = 25,
       difficultyDistribution = { easy: 30, medium: 50, hard: 20 },
@@ -52,7 +53,9 @@ export async function POST(req: Request) {
     if (class_std && class_std !== 'all') {
       baseMatch.class_std = class_std;
     }
-    if (subject && subject !== 'all') {
+    if (Array.isArray(subjects) && subjects.length > 0) {
+      baseMatch.subject = { $in: subjects.filter((item: unknown) => typeof item === 'string' && item.trim()) };
+    } else if (subject && subject !== 'all') {
       baseMatch.subject = subject;
     }
     if (Array.isArray(topics) && topics.length > 0) {

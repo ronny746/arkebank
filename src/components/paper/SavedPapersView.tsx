@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Plus
 } from 'lucide-react';
+import ExamCreatorModal from '@/components/exams/ExamCreatorModal';
 
 interface SavedPapersViewProps {
   onLoadPaper: (paper: SavedPaper) => void;
@@ -29,6 +30,7 @@ export default function SavedPapersView({
 }: SavedPapersViewProps) {
   const [papers, setPapers] = useState<SavedPaper[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [paperForExam, setPaperForExam] = useState<SavedPaper | null>(null);
 
   const fetchSavedPapers = async () => {
     setLoading(true);
@@ -215,6 +217,9 @@ export default function SavedPapersView({
                     <ExternalLink size={13} />
                     <span>Open in Studio</span>
                   </button>
+                  <button type="button" onClick={() => setPaperForExam(paper)} className="btn-create-exam">
+                    <span>Create Exam</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(paper.id)}
@@ -229,6 +234,7 @@ export default function SavedPapersView({
           })}
         </div>
       )}
+      {paperForExam && <ExamCreatorModal paper={paperForExam} onClose={() => setPaperForExam(null)} showToast={showToast} />}
     </div>
   );
 }

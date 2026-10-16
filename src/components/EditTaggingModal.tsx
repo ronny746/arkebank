@@ -166,7 +166,7 @@ export default function EditTaggingModal({
         </div>
 
         {/* Form Body (Scrollable) */}
-        <form onSubmit={handleSave} className="edit-modal-form-wrapper">
+        <form noValidate onSubmit={handleSave} className="edit-modal-form-wrapper">
           <div className="edit-modal-scroll-area">
             {errorMsg && (
               <div className="alert-box alert-error">
@@ -354,7 +354,8 @@ export default function EditTaggingModal({
                     rows={4}
                     value={formData.question}
                     onChange={(e) => handleChange('question', e.target.value)}
-                    className="form-input form-textarea"
+                    className="form-input form-textarea resize-none"
+                    style={{ resize: 'none' }}
                   />
                 </div>
 
@@ -405,7 +406,8 @@ export default function EditTaggingModal({
                     rows={5}
                     value={formData.solution}
                     onChange={(e) => handleChange('solution', e.target.value)}
-                    className="form-input form-textarea"
+                    className="form-input form-textarea resize-none"
+                    style={{ resize: 'none' }}
                   />
                 </div>
               </div>

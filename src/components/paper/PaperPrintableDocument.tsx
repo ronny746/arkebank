@@ -164,7 +164,7 @@ export default function PaperPrintableDocument({
               <div className="paper-q-header">
                 <div className="paper-q-num-box">
                   <span className="paper-q-num">Q{qNumber}.</span>
-                  {q.topic && (
+                  {isSolutions && q.topic && (
                     <span className="paper-q-topic">[{q.topic}]</span>
                   )}
                 </div>

@@ -50,7 +50,7 @@ export default function PaperBasketDrawer({
             <span className="basket-main-text">Paper Draft Basket</span>
             <span className="basket-sub-text">{totalQuestions} Questions • {totalMarks} Marks</span>
           </div>
-          <button type="button" className="btn-toggle-basket">
+          <button type="button" className="btn-toggle-basket" aria-label={isOpen ? 'Close paper draft basket' : 'Open paper draft basket'} onClick={(event) => { event.stopPropagation(); setIsOpen(!isOpen); }}>
             {isOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
           </button>
         </div>

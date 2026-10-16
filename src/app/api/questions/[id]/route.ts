@@ -2,6 +2,26 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 
+export async function GET(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    if (!extractAndVerifyToken(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const { id } = await context.params;
+    const { db } = await connectToDatabase();
+    const numericId = Number(id);
+    const filter: Record<string, unknown> = Number.isNaN(numericId)
+      ? { $or: [{ _id: id }, { id }] }
+      : { $or: [{ _id: id }, { id: numericId }] };
+    const question = await db.collection('questions').findOne(filter);
+    if (!question) return NextResponse.json({ success: false, error: 'Question not found.' }, { status: 404 });
+    return NextResponse.json({ success: true, question });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Could not load question.' }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   req: Request,
   context: { params: Promise<{ id: string }> }

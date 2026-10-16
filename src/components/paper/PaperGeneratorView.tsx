@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import Image from 'next/image';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   QuestionItem, 
   PaperMetadata, 
@@ -9,7 +8,7 @@ import {
 } from '@/types/paper';
 import MathRenderer from '../MathRenderer';
 import PaperPrintableDocument from './PaperPrintableDocument';
-import EditTaggingModal from '../EditTaggingModal';
+import ExamCreatorModal from '../exams/ExamCreatorModal';
 import { 
   Sparkles, 
   Printer, 
@@ -45,7 +44,8 @@ import {
   ChevronUp,
   Columns,
   LayoutList,
-  Languages
+  Languages,
+  ShieldCheck
 } from 'lucide-react';
 
 interface PaperGeneratorViewProps {
@@ -57,6 +57,25 @@ interface PaperGeneratorViewProps {
   onNavigateToBank: () => void;
 }
 
+const compactQuestionText = (value?: string, limit = 260) => {
+  const plain = String(value || '')
+    .replace(/<br\s*\/?\s*>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\$\$[\s\S]*?\$\$/g, ' [formula] ')
+    .replace(/\$[^$]+\$/g, ' [formula] ')
+    .replace(/\\\([\s\S]*?\\\)/g, ' [formula] ')
+    .replace(/&nbsp;|&amp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plain.length > limit ? `${plain.slice(0, limit).trim()}…` : plain;
+};
+
+type QuestionUsage = {
+  paperId: string;
+  title: string;
+  updatedAt?: string;
+};
+
 export default function PaperGeneratorView({
   classesList,
   subjectsList,
@@ -67,6 +86,9 @@ export default function PaperGeneratorView({
 }: PaperGeneratorViewProps) {
   // Active Studio Tab: editor | preview (student paper) | solutions (teacher key)
   const [studioTab, setStudioTab] = useState<'editor' | 'preview' | 'solutions'>('editor');
+  const [builderMode, setBuilderMode] = useState<'configure' | 'edit'>('configure');
+  const [builderStep, setBuilderStep] = useState<1 | 2 | 3>(1);
+  const [resetArmed, setResetArmed] = useState(false);
 
   // Paper Formatting Options
   const [optionFormat, setOptionFormat] = useState<'abcd' | '1234'>('abcd');
@@ -76,9 +98,19 @@ export default function PaperGeneratorView({
   // Generator Blueprint State
   const [selectedClass, setSelectedClass] = useState<string>(classesList[0] || 'Class 12');
   const [selectedSubject, setSelectedSubject] = useState<string>(subjectsList[0] || 'Physics');
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([subjectsList[0] || 'Physics']);
+  const [pickerSubject, setPickerSubject] = useState<string>(subjectsList[0] || 'Physics');
   const [availableTopics, setAvailableTopics] = useState<string[]>(topicsList || []);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [chapterSearch, setChapterSearch] = useState<string>('');
+  const [showAllTopics, setShowAllTopics] = useState(false);
+  const [manualQuestionId, setManualQuestionId] = useState<string>('');
+  const [addingQuestion, setAddingQuestion] = useState<boolean>(false);
+  const [previewTopic, setPreviewTopic] = useState<string>('');
+  const [topicPreviewQuestions, setTopicPreviewQuestions] = useState<QuestionItem[]>([]);
+  const [checkedPreviewIds, setCheckedPreviewIds] = useState<string[]>([]);
+  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const topicScopeRef = useRef<string>('');
   const [totalQuestions, setTotalQuestions] = useState<number>(25);
   const [timeAllowed, setTimeAllowed] = useState<string>('60 Mins');
   const [examTitle, setExamTitle] = useState<string>('Comprehensive Assessment Test 2026');
@@ -90,6 +122,13 @@ export default function PaperGeneratorView({
   const [pyqOnly, setPyqOnly] = useState<boolean>(false);
   const [hasImageOnly, setHasImageOnly] = useState<boolean>(false);
 
+  const isMultiSubjectExam = ['NEET', 'JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass);
+  const eligibleSubjects = useMemo(() => {
+    if (selectedClass === 'NEET') return subjectsList.filter(subject => ['Physics', 'Chemistry', 'Biology'].includes(subject));
+    if (['JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass)) return subjectsList.filter(subject => ['Physics', 'Chemistry', 'Mathematics'].includes(subject));
+    return subjectsList;
+  }, [selectedClass, subjectsList]);
+
   // Difficulty sliders (percentages)
   const [easyPct, setEasyPct] = useState<number>(30);
   const [medPct, setMedPct] = useState<number>(50);
@@ -97,6 +136,9 @@ export default function PaperGeneratorView({
 
   // Active Questions in Paper
   const [paperQuestions, setPaperQuestions] = useState<QuestionItem[]>([]);
+  const [activePaperId, setActivePaperId] = useState<string | null>(null);
+  const [activePaperCreatedAt, setActivePaperCreatedAt] = useState<string | null>(null);
+  const [questionUsage, setQuestionUsage] = useState<Record<string, QuestionUsage[]>>({});
   const [instructions, setInstructions] = useState<string[]>([
     'All questions are compulsory.',
     'Each correct answer carries +4 marks.',
@@ -108,9 +150,10 @@ export default function PaperGeneratorView({
   const [generating, setGenerating] = useState<boolean>(false);
   const [swappingId, setSwappingId] = useState<string | number | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
+  const [examCreatorOpen, setExamCreatorOpen] = useState(false);
 
   // Editing single question state via EditTaggingModal
-  const [editingQuestion, setEditingQuestion] = useState<QuestionItem | null>(null);
+  const [replacementIndex, setReplacementIndex] = useState<number | null>(null);
   const [openSolutions, setOpenSolutions] = useState<Record<string | number, boolean>>({});
 
   // Load saved draft from localStorage on initial render
@@ -121,6 +164,9 @@ export default function PaperGeneratorView({
         const parsed = JSON.parse(savedDraft);
         if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
           setPaperQuestions(parsed.questions);
+          setBuilderMode('edit');
+          if (parsed.paperId) setActivePaperId(parsed.paperId);
+          if (parsed.paperCreatedAt) setActivePaperCreatedAt(parsed.paperCreatedAt);
           if (parsed.examTitle) setExamTitle(parsed.examTitle);
           if (parsed.instituteName) setInstituteName(parsed.instituteName);
           if (parsed.timeAllowed) setTimeAllowed(parsed.timeAllowed);
@@ -144,6 +190,8 @@ export default function PaperGeneratorView({
         'arke_active_paper_draft',
         JSON.stringify({
           questions: paperQuestions,
+          paperId: activePaperId,
+          paperCreatedAt: activePaperCreatedAt,
           examTitle,
           instituteName,
           timeAllowed,
@@ -156,7 +204,37 @@ export default function PaperGeneratorView({
         })
       );
     }
-  }, [paperQuestions, examTitle, instituteName, timeAllowed, selectedClass, selectedSubject, instructions, optionFormat, columnsMode, optionsLayout]);
+  }, [paperQuestions, activePaperId, activePaperCreatedAt, examTitle, instituteName, timeAllowed, selectedClass, selectedSubject, instructions, optionFormat, columnsMode, optionsLayout]);
+
+  // A saved-paper lookup is deliberately separate from the question picker:
+  // it adds a lightweight reuse warning without exposing other paper content.
+  useEffect(() => {
+    const questionIds = [...new Set(paperQuestions.map((question) => String(question._id || question.id)).filter(Boolean))];
+    if (!questionIds.length) {
+      setQuestionUsage({});
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadQuestionUsage = async () => {
+      try {
+        const token = localStorage.getItem('arke_token');
+        const response = await fetch('/api/paper/usage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          credentials: 'include',
+          signal: controller.signal,
+          body: JSON.stringify({ questionIds, excludePaperId: activePaperId }),
+        });
+        const data = await response.json();
+        if (response.ok && data.success && !controller.signal.aborted) setQuestionUsage(data.usage || {});
+      } catch (error) {
+        if (!controller.signal.aborted) console.warn('Question reuse check unavailable', error);
+      }
+    };
+    void loadQuestionUsage();
+    return () => controller.abort();
+  }, [paperQuestions, activePaperId]);
 
   // Load topics dynamically when class/subject changes
   useEffect(() => {
@@ -167,17 +245,28 @@ export default function PaperGeneratorView({
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
         const res = await fetch(
-          `/api/filters?class_std=${encodeURIComponent(selectedClass)}&subject=${encodeURIComponent(selectedSubject)}`,
+          `/api/filters?class_std=${encodeURIComponent(selectedClass)}&subject=${encodeURIComponent(pickerSubject)}&lang=${selectedLang}&withQuestions=true`,
           { headers, credentials: 'include' }
         );
         if (res.ok) {
           const data = await res.json();
+          setShowAllTopics(false);
+          const nextScope = `${selectedClass}|${selectedLang}`;
+          const scopeChanged = Boolean(topicScopeRef.current) && topicScopeRef.current !== nextScope;
+          topicScopeRef.current = nextScope;
+
+          if (scopeChanged) {
+            // A class or language change creates a new blueprint. Switching the
+            // subject tab must not silently throw away chapters picked earlier.
+            setSelectedTopics([]);
+            setPreviewTopic('');
+            setTopicPreviewQuestions([]);
+          }
+
           if (Array.isArray(data.topics) && data.topics.length > 0) {
             setAvailableTopics(data.topics);
-            setSelectedTopics(data.topics);
           } else {
             setAvailableTopics([]);
-            setSelectedTopics([]);
           }
         }
       } catch (err) {
@@ -185,7 +274,7 @@ export default function PaperGeneratorView({
       }
     }
     fetchDynamicTopics();
-  }, [selectedClass, selectedSubject]);
+  }, [pickerSubject, selectedClass, selectedLang]);
 
   // Filtered topics based on search input
   const filteredTopics = useMemo(() => {
@@ -193,6 +282,7 @@ export default function PaperGeneratorView({
     const term = chapterSearch.toLowerCase().trim();
     return availableTopics.filter((t) => t.toLowerCase().includes(term));
   }, [availableTopics, chapterSearch]);
+  const visibleTopics = useMemo(() => chapterSearch.trim() || showAllTopics ? filteredTopics : filteredTopics.slice(0, 18), [chapterSearch, filteredTopics, showAllTopics]);
 
   // Apply Blueprint Presets
   const applyPreset = (preset: 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse') => {
@@ -255,18 +345,195 @@ export default function PaperGeneratorView({
   };
 
   const handleToggleTopic = (topicName: string) => {
-    setSelectedTopics((prev) =>
-      prev.includes(topicName)
-        ? prev.filter((t) => t !== topicName)
-        : [...prev, topicName]
-    );
+    // A click always opens the chapter. Selection and removal are explicit
+    // actions in the question pane, so an inspection click never removes work.
+    setSelectedTopics((previous) => previous.includes(topicName) ? previous : [...previous, topicName]);
+    setPreviewTopic(topicName);
   };
 
   const handleSelectAllTopics = () => setSelectedTopics([...availableTopics]);
-  const handleClearAllTopics = () => setSelectedTopics([]);
+  const handleClearAllTopics = () => { setSelectedTopics([]); setPreviewTopic(''); setTopicPreviewQuestions([]); };
+  const handleSelectSubject = (subject: string) => {
+    if (!isMultiSubjectExam) { setSelectedSubject(subject); setSelectedSubjects([subject]); setPickerSubject(subject); return; }
+    setSelectedSubjects(previous => {
+      const next = previous.includes(subject) ? previous.filter(item => item !== subject) : [...previous, subject];
+      const resolved = next.length ? next : [subject];
+      setSelectedSubject(resolved[0]);
+      setPickerSubject(subject);
+      return resolved;
+    });
+  };
+
+  const handleAddQuestionById = async () => {
+    const questionId = manualQuestionId.trim();
+    if (!questionId) return showToast('Enter a question ID to add it to this paper.');
+    if (paperQuestions.length >= totalQuestions) return showToast(`This paper already has its target of ${totalQuestions} questions.`);
+    setAddingQuestion(true);
+    try {
+      const token = localStorage.getItem('arke_token');
+      const response = await fetch(`/api/questions/${encodeURIComponent(questionId)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include' });
+      const data = await response.json();
+      if (!response.ok || !data.question) throw new Error(data.error || 'Question not found.');
+      const candidate = data.question as QuestionItem;
+      const candidateId = String(candidate._id || candidate.id);
+      if (paperQuestions.some(question => String(question._id || question.id) === candidateId)) throw new Error('This question is already in the paper.');
+      setPaperQuestions(previous => [...previous, { ...candidate, marks: Number(candidate.marks) || marksPerQuestion, negative_marks: Number(candidate.negative_marks) || negativeMarks }]);
+      setManualQuestionId('');
+      showToast(`Question #${candidate.id} added to the paper.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not add question.');
+    } finally {
+      setAddingQuestion(false);
+    }
+  };
+
+  const handleAddPreviewQuestion = (candidate: QuestionItem) => {
+    const candidateId = String(candidate._id || candidate.id);
+    if (paperQuestions.some(question => String(question._id || question.id) === candidateId)) return showToast('This question is already in the paper.');
+    if (replacementIndex !== null) {
+      const currentQuestion = paperQuestions[replacementIndex];
+      if (!currentQuestion) return;
+      setPaperQuestions(previous => previous.map((question, index) => index === replacementIndex ? {
+        ...candidate,
+        marks: Number(currentQuestion.marks) || marksPerQuestion,
+        negative_marks: Number(currentQuestion.negative_marks) || negativeMarks,
+      } : question));
+      setReplacementIndex(null);
+      setBuilderMode('edit');
+      setStudioTab('editor');
+      showToast(`Question ${replacementIndex + 1} replaced with #${candidate.id}.`);
+      return;
+    }
+    if (paperQuestions.length >= totalQuestions) return showToast(`This paper already has its target of ${totalQuestions} questions.`);
+    setPaperQuestions(previous => [...previous, { ...candidate, marks: Number(candidate.marks) || marksPerQuestion, negative_marks: Number(candidate.negative_marks) || negativeMarks }]);
+    showToast(`Question #${candidate.id} added. Paper now has ${paperQuestions.length + 1} questions.`);
+  };
+
+  const openChapterReplacementPicker = (index: number) => {
+    const currentQuestion = paperQuestions[index];
+    if (!currentQuestion) return;
+    const chapter = currentQuestion.topic || selectedTopics[0] || '';
+    setReplacementIndex(index);
+    setBuilderMode('configure');
+    setBuilderStep(2);
+    if (chapter) {
+      setSelectedTopics(previous => previous.includes(chapter) ? previous : [...previous, chapter]);
+      setPreviewTopic(chapter);
+    } else {
+      setPreviewTopic('');
+      setTopicPreviewQuestions([]);
+    }
+  };
+
+  const handleAddVisibleTopicQuestions = () => {
+    const existingIds = new Set(paperQuestions.map(question => String(question._id || question.id)));
+    const remaining = Math.max(0, totalQuestions - paperQuestions.length);
+    if (!remaining) return showToast(`This paper already has its target of ${totalQuestions} questions.`);
+    const additions = topicPreviewQuestions
+      .filter(question => !existingIds.has(String(question._id || question.id)))
+      .slice(0, remaining)
+      .map(question => ({
+        ...question,
+        marks: Number(question.marks) || marksPerQuestion,
+        negative_marks: Number(question.negative_marks) || negativeMarks,
+      }));
+
+    if (!additions.length) return showToast('All visible questions from this chapter are already in the paper.');
+    setPaperQuestions(previous => [...previous, ...additions]);
+    showToast(`${additions.length} questions from ${previewTopic} added. ${Math.max(0, totalQuestions - paperQuestions.length - additions.length)} slots remain.`);
+  };
+
+  const handleAddCheckedPreviewQuestions = () => {
+    const remaining = Math.max(0, totalQuestions - paperQuestions.length);
+    if (!remaining) return showToast(`This paper already has its target of ${totalQuestions} questions.`);
+    const existingIds = new Set(paperQuestions.map(question => String(question._id || question.id)));
+    const additions = topicPreviewQuestions
+      .filter(question => checkedPreviewIds.includes(String(question._id || question.id)) && !existingIds.has(String(question._id || question.id)))
+      .slice(0, remaining)
+      .map(question => ({ ...question, marks: Number(question.marks) || marksPerQuestion, negative_marks: Number(question.negative_marks) || negativeMarks }));
+    if (!additions.length) return showToast('Tick one or more new questions first.');
+    setPaperQuestions(previous => [...previous, ...additions]);
+    setCheckedPreviewIds([]);
+    showToast(`${additions.length} selected questions added to the paper.`);
+  };
+
+  const handleFillFromPreviewTopic = async () => {
+    if (!previewTopic) return;
+    const remaining = Math.max(1, totalQuestions - paperQuestions.length);
+    setGenerating(true);
+    try {
+      const token = localStorage.getItem('arke_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch('/api/paper/generate', {
+        method: 'POST', headers, credentials: 'include',
+        body: JSON.stringify({
+          class_std: selectedClass, subject: pickerSubject, subjects: selectedSubjects,
+          topics: [previewTopic], totalQuestions: remaining, lang: selectedLang,
+          difficultyDistribution: { easy: easyPct, medium: medPct, hard: hardPct },
+          hasImageOnly, pyqOnly, marksPerQuestion, negativeMarks,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not add questions from this chapter.');
+      const existingIds = new Set(paperQuestions.map(question => String(question._id || question.id)));
+      const additions = (data.questions || []).filter((question: QuestionItem) => !existingIds.has(String(question._id || question.id)));
+      if (!additions.length) throw new Error('No new questions were found in this chapter.');
+      setPaperQuestions(previous => [...previous, ...additions]);
+      showToast(`${additions.length} questions from ${previewTopic} added to the paper.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not add questions from this chapter.');
+    } finally { setGenerating(false); }
+  };
+
+  const handleRemovePreviewTopicQuestions = () => {
+    if (!previewTopic) return;
+    const before = paperQuestions.length;
+    const remainingQuestions = paperQuestions.filter(question => question.topic !== previewTopic);
+    const removed = before - remainingQuestions.length;
+    if (removed) setPaperQuestions(remainingQuestions);
+    setSelectedTopics(previous => previous.filter(topic => topic !== previewTopic));
+    setCheckedPreviewIds([]);
+    showToast(removed ? `Removed ${removed} questions from ${previewTopic}.` : `${previewTopic} removed from the chapter plan.`);
+  };
+
+  const previewTopicQuestionCount = useMemo(
+    () => previewTopic ? paperQuestions.filter(question => question.topic === previewTopic).length : 0,
+    [paperQuestions, previewTopic],
+  );
+
+  useEffect(() => {
+    setCheckedPreviewIds([]);
+    if (!previewTopic) { setTopicPreviewQuestions([]); return; }
+    const loadPreview = async () => {
+      setPreviewLoading(true);
+      try {
+        const token = localStorage.getItem('arke_token');
+        const query = new URLSearchParams({ page: '1', limit: '8', class_std: selectedClass, topic: previewTopic, lang: selectedLang });
+        if (!isMultiSubjectExam) query.set('subject', selectedSubject);
+        const response = await fetch(`/api/questions?${query}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        setTopicPreviewQuestions(data.questions || []);
+      } catch (error) {
+        setTopicPreviewQuestions([]);
+        showToast(error instanceof Error ? error.message : 'Could not load topic questions.');
+      } finally { setPreviewLoading(false); }
+    };
+    void loadPreview();
+  // Topic selection is explicit; this fetch is intentionally scoped to its latest selection.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewTopic, selectedClass, selectedLang, selectedSubject, isMultiSubjectExam]);
 
   // Generate Paper API Call
   const handleGeneratePaper = async () => {
+    const remaining = totalQuestions - paperQuestions.length;
+    if (remaining <= 0) {
+      setStudioTab('editor');
+      setBuilderMode('edit');
+      showToast(`✓ Paper ready with ${paperQuestions.length} selected questions!`);
+      return;
+    }
     setGenerating(true);
     try {
       const token = localStorage.getItem('arke_token');
@@ -280,8 +547,9 @@ export default function PaperGeneratorView({
         body: JSON.stringify({
           class_std: selectedClass,
           subject: selectedSubject,
+          subjects: selectedSubjects,
           topics: selectedTopics,
-          totalQuestions,
+          totalQuestions: remaining,
           difficultyDistribution: {
             easy: easyPct,
             medium: medPct,
@@ -301,9 +569,13 @@ export default function PaperGeneratorView({
       }
 
       if (Array.isArray(data.questions) && data.questions.length > 0) {
-        setPaperQuestions(data.questions);
+        const existingIds = new Set(paperQuestions.map(question => String(question._id || question.id)));
+        const additions = data.questions.filter((question: QuestionItem) => !existingIds.has(String(question._id || question.id)));
+        if (!additions.length) throw new Error('Those generated questions are already in this paper. Change the filters or add a different topic.');
+        setPaperQuestions(previous => [...previous, ...additions]);
         setStudioTab('editor');
-        showToast(`🎉 Generated Question Paper with ${data.questions.length} questions successfully!`);
+        setBuilderMode('edit');
+        showToast(`🎉 Added ${additions.length} generated questions. Your paper now has ${paperQuestions.length + additions.length}/${totalQuestions} questions.`);
       } else {
         throw new Error('No questions found matching criteria.');
       }
@@ -459,17 +731,6 @@ export default function PaperGeneratorView({
     }
   };
 
-  // Handle saved edit from EditTaggingModal
-  const handleQuestionEdited = (updatedQ: any) => {
-    setPaperQuestions((prev) =>
-      prev.map((q) =>
-        (q._id === updatedQ._id || q.id === updatedQ.id) ? { ...q, ...updatedQ } : q
-      )
-    );
-    setEditingQuestion(null);
-    showToast(`Question #${updatedQ.id} edited successfully in paper!`);
-  };
-
   // Toggle Solution Dropdown per question
   const toggleSolution = (id: string | number) => {
     setOpenSolutions((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -483,7 +744,8 @@ export default function PaperGeneratorView({
     }
 
     setSaving(true);
-    const paperId = `paper_${Date.now()}`;
+    const paperId = activePaperId || `paper_${Date.now()}`;
+    const createdAt = activePaperCreatedAt || new Date().toISOString();
     const paperPayload = {
       id: paperId,
       title: examTitle,
@@ -493,7 +755,7 @@ export default function PaperGeneratorView({
       timeAllowed,
       totalMarks: paperQuestions.reduce((s, q) => s + (Number(q.marks) || 4), 0),
       totalQuestions: paperQuestions.length,
-      createdAt: new Date().toISOString(),
+      createdAt,
       updatedAt: new Date().toISOString(),
       questions: paperQuestions,
       instructions,
@@ -525,6 +787,8 @@ export default function PaperGeneratorView({
       });
 
       if (res.ok) {
+        setActivePaperId(paperId);
+        setActivePaperCreatedAt(createdAt);
         showToast('💾 Paper saved successfully to Database and Local Storage!');
       } else {
         showToast('Paper saved locally.');
@@ -546,11 +810,21 @@ export default function PaperGeneratorView({
 
   // Clear Paper and Reset
   const handleResetPaper = () => {
-    if (confirm('Are you sure you want to start a new question paper? Current draft will be cleared.')) {
-      setPaperQuestions([]);
-      localStorage.removeItem('arke_active_paper_draft');
-      showToast('Paper cleared. Ready to generate a new paper.');
+    if (!resetArmed) {
+      setResetArmed(true);
+      showToast('Click “New Paper” once more to clear this draft.');
+      window.setTimeout(() => setResetArmed(false), 5000);
+      return;
     }
+    setPaperQuestions([]);
+    setActivePaperId(null);
+    setActivePaperCreatedAt(null);
+    setQuestionUsage({});
+    setBuilderMode('configure');
+    setBuilderStep(1);
+    setResetArmed(false);
+    localStorage.removeItem('arke_active_paper_draft');
+    showToast('Paper cleared. Ready to generate a new paper.');
   };
 
   // Helpers for badge rendering
@@ -577,12 +851,13 @@ export default function PaperGeneratorView({
   };
 
   const totalMarks = paperQuestions.reduce((s, q) => s + (Number(q.marks) || 4), 0);
+  const paperSubjectLabel = selectedSubjects.join(' + ');
 
   const currentMetadata: PaperMetadata = {
     title: examTitle,
     instituteName,
     class_std: selectedClass,
-    subject: selectedSubject,
+    subject: paperSubjectLabel,
     timeAllowed,
     totalMarks,
     instructions,
@@ -593,13 +868,13 @@ export default function PaperGeneratorView({
   return (
     <div className="paper-generator-wrapper">
       {/* Top Paper Studio Navigation & Quick Actions Bar */}
-      <div className="paper-studio-nav">
+      {builderMode === 'edit' && <div className="paper-studio-nav">
         <div className="studio-nav-left">
           <div className="studio-title-badge">
             <span className="studio-title-text">⚡ Question Paper Studio</span>
           </div>
 
-          {paperQuestions.length > 0 && (
+          {builderMode === 'edit' && paperQuestions.length > 0 && (
             <div className="studio-tabs-row hide-print">
               <button
                 type="button"
@@ -630,7 +905,7 @@ export default function PaperGeneratorView({
 
         {/* Global Action Buttons */}
         <div className="studio-nav-actions hide-print">
-          {paperQuestions.length > 0 ? (
+          {builderMode === 'edit' && paperQuestions.length > 0 ? (
             <>
               <button
                 type="button"
@@ -663,6 +938,11 @@ export default function PaperGeneratorView({
                 <span>Print Solutions</span>
               </button>
 
+              <button type="button" onClick={() => setExamCreatorOpen(true)} className="btn-studio-action btn-create-exam" title="Create a secure student exam from this paper">
+                <ShieldCheck size={13} />
+                <span>Create Exam</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleResetPaper}
@@ -670,16 +950,22 @@ export default function PaperGeneratorView({
                 title="Start a new paper"
               >
                 <RotateCcw size={12} />
-                <span>New Paper</span>
+                <span>{resetArmed ? 'Confirm clear' : 'New Paper'}</span>
               </button>
             </>
           ) : null}
         </div>
-      </div>
+      </div>}
 
       {/* STATE 1: Blueprint Generator Form */}
-      {paperQuestions.length === 0 ? (
-        <div className="generator-wizard-container">
+      {builderMode === 'configure' ? (
+        <div className="generator-wizard-container" data-step={builderStep}>
+          <div className="builder-steps" aria-label="Paper builder steps">
+            <button type="button" className={builderStep === 1 ? 'active' : ''} onClick={() => setBuilderStep(1)}><em>01</em> Blueprint</button><i></i>
+            <button type="button" className={builderStep === 2 ? 'active' : ''} onClick={() => setBuilderStep(2)}><em>02</em> Pick questions</button><i></i>
+            <button type="button" className={builderStep === 3 ? 'active' : ''} onClick={() => setBuilderStep(3)}><em>03</em> Balance & build</button>
+            <b>{paperQuestions.length} / {totalQuestions} selected</b>{paperQuestions.length > 0 && <button type="button" className="open-paper-button" onClick={() => { setBuilderMode('edit'); setStudioTab('editor'); }}>Open paper →</button>}
+          </div>
           {/* Preset Buttons Bar */}
           <div className="presets-bar">
             <span className="presets-bar-label">1-Click Presets:</span>
@@ -708,10 +994,10 @@ export default function PaperGeneratorView({
           {/* Configuration Two-Column Grid */}
           <div className="wizard-form-grid">
             {/* Left Card: Target Class & Chapters */}
-            <div className="wizard-card">
-              <h3 className="card-heading">1. Target Class & Chapters</h3>
+            <div className="wizard-card builder-selection-card">
+              <h3 className="card-heading">{builderStep === 1 ? '1. Assessment blueprint' : '2. Chapters & question picker'}</h3>
 
-              <div className="form-fields-grid">
+              <div className="form-fields-grid blueprint-step step-one">
                 <div className="form-field full-col">
                   <label className="field-label">Target Class / Stream</label>
                   <div className="pill-grid">
@@ -719,7 +1005,13 @@ export default function PaperGeneratorView({
                       <button
                         key={cls}
                         type="button"
-                        onClick={() => setSelectedClass(cls)}
+                        onClick={() => {
+                          setSelectedClass(cls);
+                          const defaults = cls === 'NEET' ? ['Physics', 'Chemistry', 'Biology'] : ['JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(cls) ? ['Physics', 'Chemistry', 'Mathematics'] : [selectedSubject];
+                          const available = defaults.filter(subject => subjectsList.includes(subject));
+                          setSelectedSubjects(available.length ? available : [selectedSubject]);
+                          if (available[0]) { setSelectedSubject(available[0]); setPickerSubject(available[0]); }
+                        }}
                         className={`pill-option ${selectedClass === cls ? 'active' : ''}`}
                       >
                         {cls}
@@ -729,14 +1021,14 @@ export default function PaperGeneratorView({
                 </div>
 
                 <div className="form-field full-col">
-                  <label className="field-label">Subject</label>
+                  <label className="field-label">{isMultiSubjectExam ? 'Subjects (select one or more)' : 'Subject'}</label>
                   <div className="pill-grid">
-                    {subjectsList.map((sub) => (
+                    {eligibleSubjects.map((sub) => (
                       <button
                         key={sub}
                         type="button"
-                        onClick={() => setSelectedSubject(sub)}
-                        className={`pill-option ${selectedSubject === sub ? 'active' : ''}`}
+                        onClick={() => handleSelectSubject(sub)}
+                        className={`pill-option ${selectedSubjects.includes(sub) ? 'active' : ''}`}
                       >
                         {sub}
                       </button>
@@ -765,13 +1057,44 @@ export default function PaperGeneratorView({
                     className="wizard-input"
                   />
                 </div>
+
+                <div className="form-field full-col">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="field-label" style={{ marginBottom: 0 }}>Target Paper Slots (कुल प्रश्न संख्या)</label>
+                    <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>Sets slots for chapter fill & paper size</span>
+                  </div>
+                  <div className="number-stepper-row">
+                    {[10, 15, 20, 25, 30, 35, 40, 45, 50, 75].map((cnt) => (
+                      <button
+                        key={cnt}
+                        type="button"
+                        onClick={() => setTotalQuestions(cnt)}
+                        className={`stepper-pill ${totalQuestions === cnt ? 'active' : ''}`}
+                      >
+                        {cnt} Qs
+                      </button>
+                    ))}
+                    <div className="custom-count-wrap">
+                      <span className="custom-count-label">Custom:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={180}
+                        value={totalQuestions}
+                        onChange={(e) => setTotalQuestions(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="custom-stepper-input"
+                        title="Set target question slots"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Chapters Selector with Search */}
-              <div className="topics-selection-box">
+              <div className="topics-selection-box blueprint-step step-two">
                 <div className="topics-header-row">
                   <label className="field-label">
-                    Select Target Chapters ({selectedTopics.length}/{availableTopics.length})
+                    Chapters in this paper plan ({selectedTopics.length})
                   </label>
                   <div className="topics-quick-actions">
                     <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">Select All</button>
@@ -780,6 +1103,12 @@ export default function PaperGeneratorView({
                   </div>
                 </div>
 
+                <div className="chapter-question-split">
+                  <aside className="chapter-list-panel" aria-label="Chapter list">
+                    <div className="picker-subject-tabs" aria-label="Subjects with available questions">
+                      {(isMultiSubjectExam ? selectedSubjects : [selectedSubject]).map((subject) => <button key={subject} type="button" className={pickerSubject === subject ? 'active' : ''} onClick={() => { setPickerSubject(subject); setPreviewTopic(''); setTopicPreviewQuestions([]); }}>{subject}</button>)}
+                    </div>
+                    <p className="chapter-list-hint">Click a chapter to inspect it. Add or remove its questions from the panel on the right.</p>
                 {/* Search Chapters */}
                 <div className="chapter-search-wrap">
                   <Search size={14} className="chapter-search-icon" />
@@ -801,7 +1130,7 @@ export default function PaperGeneratorView({
                   ) : filteredTopics.length === 0 ? (
                     <div className="no-topics-notice">No chapters matching &ldquo;{chapterSearch}&rdquo;</div>
                   ) : (
-                    filteredTopics.map((top) => {
+                    visibleTopics.map((top) => {
                       const isChecked = selectedTopics.includes(top);
                       return (
                         <button
@@ -816,19 +1145,111 @@ export default function PaperGeneratorView({
                       );
                     })
                   )}
+                  {!chapterSearch && filteredTopics.length > 18 && <button type="button" className="topic-chip topic-more-toggle" onClick={() => setShowAllTopics((value) => !value)}>{showAllTopics ? 'Show fewer chapters' : `Show ${filteredTopics.length - 18} more chapters`}</button>}
+                </div>
+                  </aside>
+                  <section className="question-picker-pane" aria-label="Questions in selected chapter">
+                <div className="topic-preview-panel">
+                  <div className="topic-preview-header">
+                    <div>
+                      <span>{replacementIndex !== null ? 'REPLACE QUESTION' : 'QUESTION PICKER'}</span>
+                      <h4>{replacementIndex !== null ? `Choose a replacement for Question ${replacementIndex + 1}${previewTopic ? ` · ${previewTopic}` : ''}` : previewTopic ? `${previewTopic} questions` : 'Choose a chapter to inspect questions'}</h4>
+                    </div>
+                    <div className="topic-preview-actions">
+                      <div className="slots-inline-bar" title="Change target slots for this paper">
+                        <span className="slots-inline-label">Target Slots:</span>
+                        <div className="slots-quick-controls">
+                          <button
+                            type="button"
+                            className="btn-slot-adjust"
+                            onClick={() => setTotalQuestions((prev) => Math.max(paperQuestions.length || 1, prev - 5))}
+                            title="Decrease target slots by 5"
+                          >
+                            -5
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-slot-adjust"
+                            onClick={() => setTotalQuestions((prev) => Math.max(paperQuestions.length || 1, prev - 1))}
+                            title="Decrease target slots by 1"
+                          >
+                            -1
+                          </button>
+                          <input
+                            type="number"
+                            min={paperQuestions.length || 1}
+                            max={200}
+                            value={totalQuestions}
+                            onChange={(e) => setTotalQuestions(Math.max(paperQuestions.length || 1, parseInt(e.target.value, 10) || 1))}
+                            className="input-slot-number"
+                            title="Change target paper slots"
+                          />
+                          <button
+                            type="button"
+                            className="btn-slot-adjust"
+                            onClick={() => setTotalQuestions((prev) => prev + 1)}
+                            title="Increase target slots by 1"
+                          >
+                            +1
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-slot-adjust"
+                            onClick={() => setTotalQuestions((prev) => prev + 5)}
+                            title="Increase target slots by 5"
+                          >
+                            +5
+                          </button>
+                        </div>
+                      </div>
+                      {replacementIndex === null && checkedPreviewIds.length > 0 && <button type="button" className="add-topic-preview" onClick={handleAddCheckedPreviewQuestions}>Add checked ({checkedPreviewIds.length})</button>}
+                      {replacementIndex === null && previewTopic && <button type="button" className="fill-topic-preview" onClick={() => void handleFillFromPreviewTopic()} disabled={generating || paperQuestions.length >= totalQuestions}>{generating ? 'Adding…' : `Add chapter · ${Math.max(0, totalQuestions - paperQuestions.length)} slots`}</button>}
+                      {replacementIndex === null && previewTopic && <button type="button" className="remove-topic-preview" onClick={handleRemovePreviewTopicQuestions}>Remove chapter{previewTopicQuestionCount ? ` (${previewTopicQuestionCount})` : ''}</button>}
+                      {replacementIndex !== null && <button type="button" className="fill-topic-preview" onClick={() => { setReplacementIndex(null); setBuilderMode('edit'); setStudioTab('editor'); }}>Cancel replace</button>}
+                      {previewTopic && replacementIndex === null && <button type="button" onClick={() => setPreviewTopic('')}>Close</button>}
+                    </div>
+                  </div>
+                  {previewTopic && replacementIndex === null && <p className="chapter-picker-help">Add chapter fills only the remaining paper slots. Remove chapter removes every question currently added from this chapter.</p>}
+                  {!previewTopic ? <div className="topic-picker-empty"><BookOpen size={22}/><b>{replacementIndex !== null ? 'Choose a chapter for the replacement' : 'Select a chapter to start'}</b><span>Click the + beside any chapter above. Its questions will appear here for review.</span></div> : previewLoading ? <div className="topic-picker-empty"><RefreshCw size={20} className="spin-icon"/><b>Loading chapter questions</b><span>Fetching the matching {selectedLang === 'hi' ? 'Hindi' : 'English'} records.</span></div> : topicPreviewQuestions.length === 0 ? <div className="topic-picker-empty"><Filter size={22}/><b>No questions found</b><span>Try another chapter or change the paper language.</span></div> : <div className="topic-preview-list">{topicPreviewQuestions.map((question, index) => { const questionKey = String(question._id || question.id); const isAdded = paperQuestions.some(item => String(item._id || item.id) === questionKey); const isChecked = checkedPreviewIds.includes(questionKey); return <article className="topic-preview-card" key={questionKey}><header><div><b>Question {index + 1}</b><span>#{question.id}</span></div><span className="topic-tier">{question.difficulty !== undefined && question.difficulty !== null ? `Tier ${question.difficulty}` : 'Tagged'}</span><label className="picker-check"><input type="checkbox" checked={isChecked} disabled={isAdded || replacementIndex !== null} onChange={() => setCheckedPreviewIds(previous => previous.includes(questionKey) ? previous.filter(id => id !== questionKey) : [...previous, questionKey])}/><span>Select</span></label></header><p className="topic-question-stem">{compactQuestionText(question.question)}</p><div className="topic-preview-meta"><span>{question.options?.length || 0} options</span>{question.question_image && <span>Diagram included</span>}<span>{question.subject || selectedSubject}</span></div><button type="button" onClick={() => handleAddPreviewQuestion(question)} disabled={isAdded}>{isAdded ? <><Check size={14}/> Already in paper</> : replacementIndex !== null ? <><RefreshCw size={14}/> Use as replacement</> : <><Plus size={14}/> Add this question</>}</button></article>; })}</div>}
+                </div>
+                  </section>
                 </div>
               </div>
             </div>
 
             {/* Right Card: Question Blueprint & Difficulty */}
-            <div className="wizard-card">
-              <h3 className="card-heading">2. Question Count & Difficulty Balance</h3>
+            <div className="wizard-card builder-blueprint-card blueprint-step step-three">
+              <h3 className="card-heading">3. Question count & difficulty balance</h3>
 
               <div className="form-fields-grid">
                 <div className="form-field full-col">
-                  <label className="field-label">Total Questions Count</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="field-label" style={{ marginBottom: 0 }}>Total Questions Count</label>
+                    {paperQuestions.length > 0 && (
+                      <span style={{ fontSize: '0.74rem', background: '#EFF6FF', color: '#1D4ED8', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                        ✓ {paperQuestions.length} Questions Picked from Chapters
+                      </span>
+                    )}
+                  </div>
                   <div className="number-stepper-row">
-                    {[15, 20, 25, 30, 45, 50, 75].map((cnt) => (
+                    {paperQuestions.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTotalQuestions(paperQuestions.length)}
+                        className={`stepper-pill selected-count-pill ${totalQuestions === paperQuestions.length ? 'active' : ''}`}
+                        title="Keep only the questions selected from chapters"
+                      >
+                        ✓ Selected ({paperQuestions.length} Qs)
+                      </button>
+                    )}
+                    {Array.from(new Set([
+                      ...(paperQuestions.length > 0 ? [
+                        paperQuestions.length,
+                        paperQuestions.length + 5,
+                        paperQuestions.length + 10,
+                        Math.max(25, paperQuestions.length + 15),
+                      ] : [10, 15, 20, 25, 30, 45, 50, 75])
+                    ])).filter(n => n > 0).slice(0, 7).map((cnt) => (
                       <button
                         key={cnt}
                         type="button"
@@ -842,15 +1263,32 @@ export default function PaperGeneratorView({
                       <span className="custom-count-label">Custom:</span>
                       <input
                         type="number"
-                        min={5}
+                        min={1}
                         max={180}
                         value={totalQuestions}
-                        onChange={(e) => setTotalQuestions(parseInt(e.target.value, 10) || 25)}
+                        onChange={(e) => setTotalQuestions(Math.max(1, parseInt(e.target.value, 10) || 1))}
                         className="custom-stepper-input"
                         title="Custom questions count"
                       />
                     </div>
                   </div>
+
+                  {paperQuestions.length > 0 && (
+                    <div className="slots-breakdown-info">
+                      <span className="breakdown-tag selected-tag">
+                        <b>{paperQuestions.length}</b> questions already selected from chapters
+                      </span>
+                      {totalQuestions > paperQuestions.length ? (
+                        <span className="breakdown-tag needed-tag">
+                          <b>+{totalQuestions - paperQuestions.length}</b> will be generated from databank
+                        </span>
+                      ) : (
+                        <span className="breakdown-tag exact-tag">
+                          ✓ Paper will use exact {paperQuestions.length} selected questions
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-field">
@@ -970,7 +1408,13 @@ export default function PaperGeneratorView({
                       min={0}
                       max={100}
                       value={medPct}
-                      onChange={(e) => setMedPct(parseInt(e.target.value, 10))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        const rem = 100 - val;
+                        setMedPct(val);
+                        setEasyPct(Math.round(rem * 0.6));
+                        setHardPct(rem - Math.round(rem * 0.6));
+                      }}
                       className="range-input slider-med"
                     />
                   </div>
@@ -982,7 +1426,13 @@ export default function PaperGeneratorView({
                       min={0}
                       max={100}
                       value={hardPct}
-                      onChange={(e) => setHardPct(parseInt(e.target.value, 10))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        const rem = 100 - val;
+                        setHardPct(val);
+                        setEasyPct(Math.round(rem * 0.4));
+                        setMedPct(rem - Math.round(rem * 0.4));
+                      }}
                       className="range-input slider-hard"
                     />
                   </div>
@@ -1005,6 +1455,46 @@ export default function PaperGeneratorView({
                   </span>
                 </button>
               </div>
+            </div>
+          </div>
+          <div className="wizard-step-footer">
+            <div><span>STEP {builderStep} OF 3</span><b>{builderStep === 1 ? 'Set the assessment basics' : builderStep === 2 ? 'Select chapters and inspect real questions' : 'Set the paper balance before generating'}</b></div>
+            <div>
+              {builderStep > 1 && (
+                <button type="button" className="wizard-back-button" onClick={() => setBuilderStep((builderStep - 1) as 1 | 2)}>
+                  Back
+                </button>
+              )}
+              {builderStep < 3 ? (
+                <button
+                  type="button"
+                  className="wizard-next-button"
+                  onClick={() => {
+                    if (builderStep === 2 && paperQuestions.length > 0 && totalQuestions < paperQuestions.length) {
+                      setTotalQuestions(paperQuestions.length);
+                    }
+                    setBuilderStep((builderStep + 1) as 2 | 3);
+                  }}
+                >
+                  {builderStep === 1 ? 'Choose chapters' : 'Set paper balance'} <ChevronRight size={16} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="wizard-next-button wizard-generate-button"
+                  onClick={() => void handleGeneratePaper()}
+                  disabled={generating}
+                >
+                  <Sparkles size={16} />
+                  {generating
+                    ? 'Building paper…'
+                    : paperQuestions.length >= totalQuestions
+                    ? `Build Paper with ${paperQuestions.length} Selected Questions →`
+                    : paperQuestions.length > 0
+                    ? `Generate ${totalQuestions - paperQuestions.length} More (${totalQuestions} Total) →`
+                    : `Generate ${totalQuestions} Question Paper →`}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1132,6 +1622,7 @@ export default function PaperGeneratorView({
                   const qNum = idx + 1;
                   const isSwapping = swappingId === (q._id || q.id || idx);
                   const isSolutionOpen = Boolean(openSolutions[q._id || q.id || idx]);
+                  const priorUses = questionUsage[String(q._id || q.id)] || questionUsage[String(q.id)] || [];
 
                   return (
                     <div key={q._id || q.id || idx} className="question-card">
@@ -1148,6 +1639,12 @@ export default function PaperGeneratorView({
                               <span>PYQ {q.year}</span>
                             </span>
                           ) : null}
+                          {priorUses.length > 0 && (
+                            <span className="badge badge-reused" title={priorUses.map((usage) => usage.title).join(', ')}>
+                              <Copy size={10} />
+                              Used in {priorUses.length} saved {priorUses.length === 1 ? 'paper' : 'papers'}
+                            </span>
+                          )}
                           {/* Language Switcher Badge */}
                           <button
                             type="button"
@@ -1199,15 +1696,15 @@ export default function PaperGeneratorView({
                             <span>{isSwapping ? 'Swapping...' : 'Replace Question'}</span>
                           </button>
 
-                          {/* Edit Question */}
+                          {/* Choose a chapter-matched replacement */}
                           <button
                             type="button"
-                            onClick={() => setEditingQuestion(q)}
+                            onClick={() => openChapterReplacementPicker(idx)}
                             className="btn-card-action btn-edit-tag"
-                            title="Edit question text, formula, options & solution"
+                            title="Choose a replacement from this question's chapter"
                           >
                             <Pencil size={12} />
-                            <span>Edit Question</span>
+                            <span>Choose from chapter</span>
                           </button>
 
                           {/* Remove Question */}
@@ -1221,6 +1718,16 @@ export default function PaperGeneratorView({
                           </button>
                         </div>
                       </div>
+
+                      {priorUses.length > 0 && (
+                        <div className="question-reuse-note" role="status">
+                          <Copy size={13} aria-hidden="true" />
+                          <span>
+                            <b>Reuse check:</b> this question is already in {priorUses.map((usage) => usage.title).join(', ')}.
+                            Use <b>Replace Question</b> or the remove icon above if you do not want it repeated.
+                          </span>
+                        </div>
+                      )}
 
                       {/* Breadcrumb Hierarchy */}
                       {(q.topic || q.sub_topic) && (
@@ -1406,15 +1913,8 @@ export default function PaperGeneratorView({
         </div>
       )}
 
-      {/* Edit Question Modal (Opens when teacher clicks 'Edit Question' on any question) */}
-      {editingQuestion && (
-        <EditTaggingModal
-          question={editingQuestion}
-          onClose={() => setEditingQuestion(null)}
-          onSaved={handleQuestionEdited}
-          availableClasses={classesList}
-          availableSubjects={subjectsList}
-        />
+      {examCreatorOpen && (
+        <ExamCreatorModal paper={{ id: 'paper-generator-draft', title: examTitle, instituteName, class_std: selectedClass, subject: selectedSubject, timeAllowed, totalMarks, totalQuestions: paperQuestions.length, createdAt: '', updatedAt: '', questions: paperQuestions, instructions }} onClose={() => setExamCreatorOpen(false)} showToast={showToast} />
       )}
     </div>
   );

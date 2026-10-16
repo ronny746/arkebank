@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { 
   Search, 
@@ -14,11 +15,16 @@ import {
   Filter,
   X,
   XCircle,
-  Calendar,
-  Sparkles,
   FolderOpen,
-  Database
+  Database,
+  LayoutDashboard,
+  FilePlus2,
+  Radio,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
+import DashboardView from '@/components/DashboardView';
+import ExamManagementView from '@/components/exams/ExamManagementView';
 import PaperGeneratorView from '@/components/paper/PaperGeneratorView';
 import SavedPapersView from '@/components/paper/SavedPapersView';
 import { QuestionItem, SavedPaper } from '@/types/paper';
@@ -30,7 +36,14 @@ import EditTaggingModal from '@/components/EditTaggingModal';
 import QuestionCardSkeleton from '@/components/QuestionCardSkeleton';
 import SidebarFiltersSkeleton from '@/components/SidebarFiltersSkeleton';
 
-export default function Home() {
+type PortalView = 'dashboard' | 'bank' | 'generator' | 'saved' | 'exams';
+
+const portalPath: Record<PortalView, string> = {
+  dashboard: '/', bank: '/question-bank', generator: '/paper-generator', saved: '/saved-papers', exams: '/exams',
+};
+
+export default function Home({ initialTab = 'dashboard' }: { initialTab?: PortalView }) {
+  const router = useRouter();
   // Authentication State
   const [user, setUser] = useState<{ email: string } | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
@@ -75,8 +88,14 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Paper Generator Navigation & Basket State
-  const [activeNavTab, setActiveNavTab] = useState<'bank' | 'generator' | 'saved'>('bank');
+  const [activeNavTab, setActiveNavTab] = useState<PortalView>(initialTab);
+  const [navCollapsed, setNavCollapsed] = useState(false);
   const [basketQuestions, setBasketQuestions] = useState<QuestionItem[]>([]);
+
+  const navigate = (view: PortalView) => {
+    setActiveNavTab(view);
+    router.push(portalPath[view]);
+  };
 
   useEffect(() => {
     try {
@@ -128,9 +147,11 @@ export default function Home() {
         selectedClass: paper.class_std,
         selectedSubject: paper.subject,
         instructions: paper.instructions,
+        paperId: paper.id,
+        paperCreatedAt: paper.createdAt,
       })
     );
-    setActiveNavTab('generator');
+    navigate('generator');
     showToast(`Loaded "${paper.title}" into Paper Studio!`);
   };
 
@@ -365,8 +386,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Search Bar */}
-        <form onSubmit={handleSearchSubmit} className="header-search-form">
+        {/* Question search appears only in the Bank workspace. */}
+        {activeNavTab === 'bank' && <form noValidate onSubmit={handleSearchSubmit} className="header-search-form">
           <Search size={15} className="search-icon" />
           <input
             type="text"
@@ -388,7 +409,7 @@ export default function Home() {
               <X size={13} />
             </button>
           )}
-        </form>
+        </form>}
 
         {/* User Session */}
         <div className="header-right">
@@ -410,35 +431,20 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Top Navigation Bar */}
-      <nav className="portal-main-nav hide-print">
-        <button
-          type="button"
-          onClick={() => setActiveNavTab('bank')}
-          className={`portal-nav-tab ${activeNavTab === 'bank' ? 'active' : ''}`}
-        >
-          <Database size={15} />
-          <span>Question Bank ({totalDbCount.toLocaleString()})</span>
-        </button>
+      <div className={`portal-app-shell ${navCollapsed ? 'nav-collapsed' : ''}`}>
+        <aside className="portal-side-nav" aria-label="Primary workspace navigation">
+          <div className="side-nav-top"><div className="side-nav-label">WORKSPACE</div><button type="button" className="side-nav-toggle" onClick={() => setNavCollapsed(value => !value)} aria-label={navCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}>{navCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div>
+          <button className={activeNavTab === 'dashboard' ? 'active' : ''} onClick={() => navigate('dashboard')}><LayoutDashboard size={18}/><span>Dashboard</span></button>
+          <button className={activeNavTab === 'bank' ? 'active' : ''} onClick={() => navigate('bank')}><Database size={18}/><span>Question bank</span></button>
+          <button className={activeNavTab === 'generator' ? 'active' : ''} onClick={() => navigate('generator')}><FilePlus2 size={18}/><span>Paper studio</span></button>
+          <button className={activeNavTab === 'saved' ? 'active' : ''} onClick={() => navigate('saved')}><FolderOpen size={18}/><span>Saved papers</span></button>
+          <button className={activeNavTab === 'exams' ? 'active' : ''} onClick={() => navigate('exams')}><Radio size={18}/><span>Exams & tracking</span></button>
+          <div className="side-nav-tip"><Radio size={15}/><span>Create a paper, publish its link, then track every attempt here.</span></div>
+        </aside>
+        <section className="portal-workspace">
 
-        <button
-          type="button"
-          onClick={() => setActiveNavTab('generator')}
-          className={`portal-nav-tab ${activeNavTab === 'generator' ? 'active' : ''}`}
-        >
-          <Sparkles size={15} className="text-emerald" />
-          <span>⚡ Paper Generator</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveNavTab('saved')}
-          className={`portal-nav-tab ${activeNavTab === 'saved' ? 'active' : ''}`}
-        >
-          <FolderOpen size={15} />
-          <span>Saved Papers Library</span>
-        </button>
-      </nav>
+      {activeNavTab === 'dashboard' && <DashboardView questionCount={totalDbCount} onNavigate={navigate} />}
+      {activeNavTab !== 'dashboard' && activeNavTab !== 'exams' && <div className="workspace-context hide-print"><span>{activeNavTab === 'bank' ? 'Question bank' : activeNavTab === 'generator' ? 'Paper studio' : 'Saved papers'}</span></div>}
 
       {/* Mobile Top Bar with Filter Drawer Button */}
       {activeNavTab === 'bank' && (
@@ -948,7 +954,7 @@ export default function Home() {
           topicsList={topicsList}
           onImageZoom={(url, title) => setZoomImage({ url, title })}
           showToast={showToast}
-          onNavigateToBank={() => setActiveNavTab('bank')}
+          onNavigateToBank={() => navigate('bank')}
         />
       )}
 
@@ -956,10 +962,15 @@ export default function Home() {
       {activeNavTab === 'saved' && (
         <SavedPapersView
           onLoadPaper={handleLoadSavedPaper}
-          onNavigateToGenerator={() => setActiveNavTab('generator')}
+          onNavigateToGenerator={() => navigate('generator')}
           showToast={showToast}
         />
       )}
+
+      {activeNavTab === 'exams' && <ExamManagementView onBack={() => navigate('dashboard')} showToast={showToast} />}
+
+        </section>
+      </div>
 
       {/* High-Resolution Diagram Zoom Modal */}
       <ImageModal

@@ -20,6 +20,8 @@ export async function GET(req: Request) {
     const class_std = searchParams.get('class_std');
     const subject = searchParams.get('subject');
     const topic = searchParams.get('topic');
+    const withQuestions = searchParams.get('withQuestions') === 'true';
+    const lang = searchParams.get('lang');
 
     const { db } = await connectToDatabase();
     const syllabusCol = db.collection('syllabus');
@@ -42,7 +44,13 @@ export async function GET(req: Request) {
     if (class_std && class_std !== 'all') {
       syllabusQuery.class_std = class_std;
     }
-    const dynamicSubjects = (await syllabusCol.distinct('subject', syllabusQuery)).filter(Boolean).sort();
+    const questionScope: Record<string, unknown> = {};
+    if (class_std && class_std !== 'all') questionScope.class_std = class_std;
+    if (lang && lang !== 'all') questionScope.lang = lang;
+    const dynamicSubjects = (withQuestions
+      ? await questionsCol.distinct('subject', questionScope)
+      : await syllabusCol.distinct('subject', syllabusQuery)
+    ).filter(Boolean).sort();
 
     // 3. Fetch dynamic topics/chapters and subtopics from precomputed syllabus
     let topics: string[] = [];
@@ -82,6 +90,15 @@ export async function GET(req: Request) {
         }
       });
       topics = Array.from(topicSet).sort();
+    }
+
+    // Paper Studio asks for only usable chapters. Syllabus can contain chapters
+    // before question ingestion, so remove those empty taxonomy entries here.
+    if (withQuestions && class_std && class_std !== 'all' && subject && subject !== 'all') {
+      const topicScope: Record<string, unknown> = { ...questionScope, subject };
+      const questionTopics = await questionsCol.distinct('topic', topicScope);
+      const usableTopics = new Set(questionTopics.filter(Boolean));
+      topics = topics.filter((item) => usableTopics.has(item));
     }
 
     // 4. Fetch distinct years (sorted descending)

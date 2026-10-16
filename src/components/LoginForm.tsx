@@ -137,7 +137,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         )}
 
         {step === 'email' ? (
-          <form onSubmit={handleSendOtp} className="login-form">
+          <form noValidate onSubmit={handleSendOtp} className="login-form">
             <div className="form-group">
               <label htmlFor="email" className="form-label">Institutional or Faculty Email</label>
               <div className="input-group">
@@ -170,7 +170,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             </button>
           </form>
         ) : (
-          <form onSubmit={handleVerifyOtp} className="login-form">
+          <form noValidate onSubmit={handleVerifyOtp} className="login-form">
             {/* Passcode Display Box */}
             {demoOtp && (
               <div className="demo-otp-banner">
