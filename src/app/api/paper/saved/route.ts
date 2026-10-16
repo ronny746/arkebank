@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { cached } from '@/lib/cache';
 
 export async function GET(req: Request) {
   try {
@@ -18,11 +19,14 @@ export async function GET(req: Request) {
     const { db } = await connectToDatabase();
     const papersCol = db.collection('papers');
 
-    const papers = await papersCol
-      .find({})
-      .sort({ updatedAt: -1 })
-      .limit(50)
-      .toArray();
+    // High performance caching for saved papers list (TTL: 60s)
+    const papers = await cached('papers:list:v1', 60, async () => {
+      return await papersCol
+        .find({})
+        .sort({ updatedAt: -1 })
+        .limit(100)
+        .toArray();
+    });
 
     return NextResponse.json({
       success: true,

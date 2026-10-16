@@ -1,3 +1,4 @@
+import { delCache } from '@/lib/cache';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
@@ -24,6 +25,7 @@ export async function DELETE(
     const papersCol = db.collection('papers');
 
     const result = await papersCol.deleteOne({ id });
+    await delCache('papers:list:v1');
 
     return NextResponse.json({
       success: true,

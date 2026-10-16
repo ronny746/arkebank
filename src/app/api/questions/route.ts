@@ -1,3 +1,4 @@
+import { cached } from '@/lib/cache';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
@@ -78,15 +79,21 @@ export async function GET(req: Request) {
     const { db } = await connectToDatabase();
     const questionsCol = db.collection('questions');
 
-    const [total, questions] = await Promise.all([
-      questionsCol.countDocuments(query),
-      questionsCol
-        .find(query)
-        .sort({ topic_id: 1, sub_topic_id: 1, id: 1 })
-        .skip(skip)
-        .limit(limit)
-        .toArray()
-    ]);
+    const isUnfiltered = Object.keys(query).length === 0;
+
+    // Fast count: estimatedDocumentCount for unfiltered, cached count for filtered queries
+    const countPromise = isUnfiltered
+      ? questionsCol.estimatedDocumentCount()
+      : cached(`qcount:${JSON.stringify(query)}`, 600, () => questionsCol.countDocuments(query));
+
+    const questionsPromise = questionsCol
+      .find(query)
+      .sort({ topic_id: 1, sub_topic_id: 1, id: 1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
+    const [total, questions] = await Promise.all([countPromise, questionsPromise]);
 
     return NextResponse.json({
       success: true,
