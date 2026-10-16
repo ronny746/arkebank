@@ -83,6 +83,24 @@ export default function PaperPrintableDocument({
           </div>
         </div>
 
+        {/* Candidate Details Box (for Student Examination Paper) */}
+        {!isSolutions && (
+          <div className="candidate-details-box">
+            <div className="candidate-field">
+              <span className="candidate-label">Student Name:</span>
+              <span className="candidate-line"></span>
+            </div>
+            <div className="candidate-field">
+              <span className="candidate-label">Roll Number:</span>
+              <span className="candidate-line"></span>
+            </div>
+            <div className="candidate-field">
+              <span className="candidate-label">Invigilator Sign:</span>
+              <span className="candidate-line"></span>
+            </div>
+          </div>
+        )}
+
         {/* General Instructions Box */}
         {metadata.instructions && metadata.instructions.length > 0 && (
           <div className="exam-instructions-box">

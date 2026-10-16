@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { 
   QuestionItem, 
@@ -31,7 +31,19 @@ import {
   Copy,
   BookOpen,
   Filter,
-  Check
+  Check,
+  Search,
+  Zap,
+  Target,
+  Stethoscope,
+  GraduationCap,
+  Settings2,
+  CheckSquare,
+  Square,
+  SlidersHorizontal,
+  ChevronDown,
+  Building2,
+  PenTool
 } from 'lucide-react';
 
 interface PaperGeneratorViewProps {
@@ -55,7 +67,7 @@ export default function PaperGeneratorView({
   showToast,
   onNavigateToBank,
 }: PaperGeneratorViewProps) {
-  // Active Studio Mode
+  // Active Studio Tab
   const [studioTab, setStudioTab] = useState<'editor' | 'preview' | 'solutions'>('editor');
 
   // Generator Blueprint State
@@ -63,6 +75,7 @@ export default function PaperGeneratorView({
   const [selectedSubject, setSelectedSubject] = useState<string>(subjectsList[0] || 'Physics');
   const [availableTopics, setAvailableTopics] = useState<string[]>(topicsList || []);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [chapterSearch, setChapterSearch] = useState<string>('');
   const [totalQuestions, setTotalQuestions] = useState<number>(25);
   const [timeAllowed, setTimeAllowed] = useState<string>('60 Mins');
   const [examTitle, setExamTitle] = useState<string>('Comprehensive Assessment Test 2026');
@@ -161,6 +174,13 @@ export default function PaperGeneratorView({
     fetchDynamicTopics();
   }, [selectedClass, selectedSubject]);
 
+  // Filtered topics based on search input
+  const filteredTopics = useMemo(() => {
+    if (!chapterSearch.trim()) return availableTopics;
+    const term = chapterSearch.toLowerCase().trim();
+    return availableTopics.filter((t) => t.toLowerCase().includes(term));
+  }, [availableTopics, chapterSearch]);
+
   // Apply Pre-configured Blueprint Presets
   const applyPreset = (preset: 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse') => {
     if (preset === 'balanced') {
@@ -219,6 +239,12 @@ export default function PaperGeneratorView({
       setExamTitle(`CBSE Board Pattern Full Mock - ${selectedSubject}`);
     }
     showToast(`Loaded ${preset.toUpperCase()} blueprint pattern.`);
+  };
+
+  const setDifficultyPreset = (easy: number, med: number, hard: number) => {
+    setEasyPct(easy);
+    setMedPct(med);
+    setHardPct(hard);
   };
 
   // Toggle single topic in selection
@@ -436,7 +462,6 @@ export default function PaperGeneratorView({
 
   // Compute stats for current paper
   const totalMarks = paperQuestions.reduce((s, q) => s + (Number(q.marks) || 4), 0);
-  const totalNegative = paperQuestions.reduce((s, q) => s + (Number(q.negative_marks) || 1), 0);
   const easyCount = paperQuestions.filter((q) => ['0', '1', 0, 1].includes(q.difficulty as any)).length;
   const medCount = paperQuestions.filter((q) => ['2', 2].includes(q.difficulty as any)).length;
   const hardCount = paperQuestions.filter((q) => ['3', '4', 3, 4].includes(q.difficulty as any)).length;
@@ -459,8 +484,13 @@ export default function PaperGeneratorView({
       <div className="paper-studio-nav">
         <div className="studio-nav-left">
           <div className="studio-title-badge">
-            <Sparkles size={16} className="text-emerald animate-pulse" />
-            <span className="studio-title-text">Smart Question Paper Studio</span>
+            <div className="sparkle-circle-icon">
+              <Sparkles size={16} className="text-white" />
+            </div>
+            <div className="title-text-group">
+              <span className="studio-title-text">Paper Generator Studio</span>
+              <span className="studio-subtext-badge">5.27 Lakh Questions Active Engine</span>
+            </div>
           </div>
 
           {paperQuestions.length > 0 && (
@@ -470,7 +500,7 @@ export default function PaperGeneratorView({
                 className={`studio-tab-btn ${studioTab === 'editor' ? 'active' : ''}`}
                 onClick={() => setStudioTab('editor')}
               >
-                <Sliders size={14} />
+                <SlidersHorizontal size={14} />
                 <span>1. Organize & Edit ({paperQuestions.length})</span>
               </button>
               <button
@@ -479,7 +509,7 @@ export default function PaperGeneratorView({
                 onClick={() => setStudioTab('preview')}
               >
                 <Eye size={14} />
-                <span>2. Student Question Paper</span>
+                <span>2. Student Paper (Printable)</span>
               </button>
               <button
                 type="button"
@@ -546,118 +576,178 @@ export default function PaperGeneratorView({
                 className="btn-studio-action btn-load-basket"
               >
                 <Plus size={14} />
-                <span>Use {basketQuestions.length} Qs from Basket</span>
+                <span>Load {basketQuestions.length} Qs from Basket</span>
               </button>
             )
           )}
         </div>
       </div>
 
-      {/* STATE 1: Empty State / Setup Blueprint Wizard */}
+      {/* STATE 1: Setup Blueprint Wizard */}
       {paperQuestions.length === 0 ? (
         <div className="generator-wizard-container">
-          {/* Hero Banner */}
+          {/* Hero Banner with Sleek Mesh & Gradient */}
           <div className="wizard-hero-card">
-            <div className="wizard-hero-text">
-              <span className="hero-eyebrow">ARKE SCHOLARS QUESTION BANK ENGINE</span>
-              <h2 className="hero-title">Generate Examination Papers in Seconds</h2>
+            <div className="wizard-hero-left">
+              <div className="hero-tag-pill">
+                <Zap size={13} className="text-emerald" />
+                <span>AI-Assisted Blueprint Assessment Engine</span>
+              </div>
+              <h2 className="hero-title">Create Perfect Exam Papers in Seconds</h2>
               <p className="hero-desc">
-                Select your examination pattern, target chapters, and difficulty distribution. 
-                Our high-speed MongoDB engine will intelligently sample balanced, high-yield questions from the 5.27 Lakh question bank.
+                Select your examination pattern, choose specific chapters or full syllabus, and customize difficulty. 
+                Our high-speed engine intelligently draws high-yield, balanced questions without duplicates.
               </p>
             </div>
-            {basketQuestions.length > 0 && (
+
+            {basketQuestions.length > 0 ? (
               <div className="basket-callout-card">
                 <div className="basket-callout-info">
                   <span className="callout-count">{basketQuestions.length} Questions</span>
-                  <span className="callout-text">ready in your Question Basket</span>
+                  <span className="callout-text">Selected in your Question Basket</span>
                 </div>
                 <button
                   type="button"
                   onClick={handleLoadBasketQuestions}
                   className="btn-callout-load"
                 >
-                  Load Into Paper
+                  <Plus size={14} />
+                  <span>Build Paper with Basket</span>
+                </button>
+              </div>
+            ) : (
+              <div className="hero-quick-tip-card">
+                <span className="tip-badge">PRO TIP</span>
+                <p>Browse Question Bank anytime and click <b>+ Add to Paper</b> to cherry-pick questions manually!</p>
+                <button type="button" onClick={onNavigateToBank} className="btn-tip-browse">
+                  Browse Bank
                 </button>
               </div>
             )}
           </div>
 
-          {/* Preset Blueprint Pills */}
+          {/* 1-Click Blueprint Presets */}
           <div className="wizard-section">
             <div className="section-label-row">
-              <span className="section-label">⚡ 1-Click Examination Presets</span>
-              <span className="section-subtext">Click any preset to auto-configure pattern</span>
+              <div className="label-with-icon">
+                <Sparkles size={16} className="text-emerald" />
+                <span className="section-label">1-Click Exam Presets</span>
+              </div>
+              <span className="section-subtext">Click any preset to instantly auto-configure blueprint pattern</span>
             </div>
+
             <div className="presets-grid">
               <button
                 type="button"
-                className="preset-pill-card"
+                className="preset-pill-card preset-balanced"
                 onClick={() => applyPreset('balanced')}
               >
-                <div className="preset-name">Balanced Unit Test</div>
-                <div className="preset-meta">25 Questions • 100 Marks • 60 Mins</div>
+                <div className="preset-icon-wrap icon-balanced">
+                  <Zap size={18} />
+                </div>
+                <div className="preset-card-body">
+                  <div className="preset-name">Balanced Unit Test</div>
+                  <div className="preset-meta">25 Qs • 100 Marks • 60 Mins</div>
+                  <div className="preset-tag">30% Easy • 50% Med • 20% Hard</div>
+                </div>
               </button>
 
               <button
                 type="button"
-                className="preset-pill-card"
+                className="preset-pill-card preset-jee"
                 onClick={() => applyPreset('jee_main')}
               >
-                <div className="preset-name">JEE Main Pattern</div>
-                <div className="preset-meta">25 MCQs • 100 Marks • +4/-1</div>
+                <div className="preset-icon-wrap icon-jee">
+                  <Target size={18} />
+                </div>
+                <div className="preset-card-body">
+                  <div className="preset-name">JEE Main Pattern</div>
+                  <div className="preset-meta">25 MCQs • 100 Marks • +4/-1</div>
+                  <div className="preset-tag">Official NTA Pattern</div>
+                </div>
               </button>
 
               <button
                 type="button"
-                className="preset-pill-card"
+                className="preset-pill-card preset-neet"
                 onClick={() => applyPreset('neet')}
               >
-                <div className="preset-name">NEET Drill Mock</div>
-                <div className="preset-meta">45 MCQs • 180 Marks • +4/-1</div>
+                <div className="preset-icon-wrap icon-neet">
+                  <Stethoscope size={18} />
+                </div>
+                <div className="preset-card-body">
+                  <div className="preset-name">NEET Drill Mock</div>
+                  <div className="preset-meta">45 MCQs • 180 Marks • +4/-1</div>
+                  <div className="preset-tag">Medical Speed Test</div>
+                </div>
               </button>
 
               <button
                 type="button"
-                className="preset-pill-card"
+                className="preset-pill-card preset-cbse"
                 onClick={() => applyPreset('cbse')}
               >
-                <div className="preset-name">CBSE Board Mock</div>
-                <div className="preset-meta">35 Qs • 70 Marks • 180 Mins</div>
+                <div className="preset-icon-wrap icon-cbse">
+                  <GraduationCap size={18} />
+                </div>
+                <div className="preset-card-body">
+                  <div className="preset-name">CBSE Board Mock</div>
+                  <div className="preset-meta">35 Qs • 70 Marks • 180 Mins</div>
+                  <div className="preset-tag">Board Syllabus Focus</div>
+                </div>
               </button>
 
               <button
                 type="button"
-                className="preset-pill-card"
+                className="preset-pill-card preset-foundation"
                 onClick={() => applyPreset('foundation')}
               >
-                <div className="preset-name">Foundation Easy</div>
-                <div className="preset-meta">20 Qs • 60% Easy • 40% Med</div>
+                <div className="preset-icon-wrap icon-foundation">
+                  <BookOpen size={18} />
+                </div>
+                <div className="preset-card-body">
+                  <div className="preset-name">Foundation Builder</div>
+                  <div className="preset-meta">20 Qs • 60 Marks • 45 Mins</div>
+                  <div className="preset-tag">60% Easy • 40% Medium</div>
+                </div>
               </button>
 
               <button
                 type="button"
-                className="preset-pill-card"
+                className="preset-pill-card preset-advanced"
                 onClick={() => applyPreset('advanced')}
               >
-                <div className="preset-name">Advanced Challenger</div>
-                <div className="preset-meta">30 Qs • 40% Hard • Strict Marks</div>
+                <div className="preset-icon-wrap icon-advanced">
+                  <Award size={18} />
+                </div>
+                <div className="preset-card-body">
+                  <div className="preset-name">Advanced Challenger</div>
+                  <div className="preset-meta">30 Qs • 120 Marks • +4/-2</div>
+                  <div className="preset-tag">High Difficulty Drill</div>
+                </div>
               </button>
             </div>
           </div>
 
           {/* Configuration Form Grid */}
           <div className="wizard-form-grid">
-            {/* Left Column: Exam Details & Topics */}
+            {/* Card 1: Examination & Syllabus */}
             <div className="wizard-card">
-              <h3 className="card-heading">
-                <FileText size={16} className="text-emerald" />
-                <span>1. Examination Target & Syllabus</span>
-              </h3>
+              <div className="card-heading-row">
+                <div className="card-heading-left">
+                  <div className="card-icon-badge">
+                    <PenTool size={16} />
+                  </div>
+                  <div>
+                    <h3 className="card-heading">1. Target Class & Chapters</h3>
+                    <p className="card-subhead">Choose target curriculum and syllabus coverage</p>
+                  </div>
+                </div>
+              </div>
 
               <div className="form-fields-grid">
                 <div className="form-field">
-                  <label>Class / Stream</label>
+                  <label className="field-label">Target Class / Stream</label>
                   <select
                     value={selectedClass}
                     onChange={(e) => setSelectedClass(e.target.value)}
@@ -670,7 +760,7 @@ export default function PaperGeneratorView({
                 </div>
 
                 <div className="form-field">
-                  <label>Subject</label>
+                  <label className="field-label">Subject</label>
                   <select
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}
@@ -683,18 +773,18 @@ export default function PaperGeneratorView({
                 </div>
 
                 <div className="form-field full-col">
-                  <label>Examination Title</label>
+                  <label className="field-label">Exam Title & Purpose</label>
                   <input
                     type="text"
                     value={examTitle}
                     onChange={(e) => setExamTitle(e.target.value)}
-                    placeholder="e.g. JEE Main Full Test 2026"
+                    placeholder="e.g. JEE Main Mock Assessment #1"
                     className="wizard-input"
                   />
                 </div>
 
                 <div className="form-field full-col">
-                  <label>Institute / School Name</label>
+                  <label className="field-label">Institute / Academy Name</label>
                   <input
                     type="text"
                     value={instituteName}
@@ -705,24 +795,58 @@ export default function PaperGeneratorView({
                 </div>
               </div>
 
-              {/* Topics / Chapters Selection */}
+              {/* Enhanced Chapter / Topics Multi-Selector */}
               <div className="topics-selection-box">
                 <div className="topics-header-row">
-                  <label className="topics-label">
-                    Select Target Chapters ({selectedTopics.length}/{availableTopics.length})
-                  </label>
-                  <div className="topics-quick-actions">
-                    <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">Select All</button>
-                    <span className="dot-sep">•</span>
-                    <button type="button" onClick={handleClearAllTopics} className="btn-text-action">Clear All</button>
+                  <div className="topics-title-group">
+                    <label className="field-label">
+                      Select Target Chapters ({selectedTopics.length}/{availableTopics.length})
+                    </label>
                   </div>
+                  <div className="topics-quick-actions">
+                    <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">
+                      Select All
+                    </button>
+                    <span className="dot-sep">•</span>
+                    <button type="button" onClick={handleClearAllTopics} className="btn-text-action">
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chapter Search Box */}
+                <div className="chapter-search-wrap">
+                  <Search size={14} className="chapter-search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search chapters (e.g. Optics, Mechanics, Thermodynamics)..."
+                    value={chapterSearch}
+                    onChange={(e) => setChapterSearch(e.target.value)}
+                    className="chapter-search-input"
+                  />
+                  {chapterSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setChapterSearch('')}
+                      className="chapter-search-clear"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
 
                 <div className="topics-chips-scroll">
                   {availableTopics.length === 0 ? (
-                    <div className="no-topics-notice">Loading chapters from syllabus database...</div>
+                    <div className="no-topics-notice">
+                      <Clock size={16} className="animate-spin text-muted" />
+                      <span>Loading syllabus chapters from database...</span>
+                    </div>
+                  ) : filteredTopics.length === 0 ? (
+                    <div className="no-topics-notice">
+                      <span>No chapters found matching &ldquo;{chapterSearch}&rdquo;</span>
+                    </div>
                   ) : (
-                    availableTopics.map((top) => {
+                    filteredTopics.map((top) => {
                       const isChecked = selectedTopics.includes(top);
                       return (
                         <button
@@ -731,7 +855,9 @@ export default function PaperGeneratorView({
                           onClick={() => handleToggleTopic(top)}
                           className={`topic-chip ${isChecked ? 'active' : ''}`}
                         >
-                          <span className="chip-indicator">{isChecked ? '✓' : '+'}</span>
+                          <span className="chip-indicator">
+                            {isChecked ? <Check size={12} /> : <Plus size={12} />}
+                          </span>
                           <span className="chip-text">{top}</span>
                         </button>
                       );
@@ -741,16 +867,23 @@ export default function PaperGeneratorView({
               </div>
             </div>
 
-            {/* Right Column: Blueprint Specs & Difficulty */}
+            {/* Card 2: Question Blueprint & Distribution */}
             <div className="wizard-card">
-              <h3 className="card-heading">
-                <Sliders size={16} className="text-emerald" />
-                <span>2. Questions Count & Difficulty Balance</span>
-              </h3>
+              <div className="card-heading-row">
+                <div className="card-heading-left">
+                  <div className="card-icon-badge">
+                    <Settings2 size={16} />
+                  </div>
+                  <div>
+                    <h3 className="card-heading">2. Question Count & Difficulty</h3>
+                    <p className="card-subhead">Control marks, time, and tier balance</p>
+                  </div>
+                </div>
+              </div>
 
               <div className="form-fields-grid">
-                <div className="form-field">
-                  <label>Total Questions</label>
+                <div className="form-field full-col">
+                  <label className="field-label">Total Questions Count</label>
                   <div className="number-stepper-row">
                     {[15, 20, 25, 30, 45, 50, 75].map((cnt) => (
                       <button
@@ -759,23 +892,26 @@ export default function PaperGeneratorView({
                         onClick={() => setTotalQuestions(cnt)}
                         className={`stepper-pill ${totalQuestions === cnt ? 'active' : ''}`}
                       >
-                        {cnt}
+                        {cnt} Qs
                       </button>
                     ))}
-                    <input
-                      type="number"
-                      min={5}
-                      max={180}
-                      value={totalQuestions}
-                      onChange={(e) => setTotalQuestions(parseInt(e.target.value, 10) || 25)}
-                      className="custom-stepper-input"
-                      title="Custom questions count"
-                    />
+                    <div className="custom-count-wrap">
+                      <span className="custom-count-label">Custom:</span>
+                      <input
+                        type="number"
+                        min={5}
+                        max={180}
+                        value={totalQuestions}
+                        onChange={(e) => setTotalQuestions(parseInt(e.target.value, 10) || 25)}
+                        className="custom-stepper-input"
+                        title="Custom questions count"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div className="form-field">
-                  <label>Time Allowed</label>
+                  <label className="field-label">Time Duration</label>
                   <input
                     type="text"
                     value={timeAllowed}
@@ -786,29 +922,7 @@ export default function PaperGeneratorView({
                 </div>
 
                 <div className="form-field">
-                  <label>Marks per Question</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={marksPerQuestion}
-                    onChange={(e) => setMarksPerQuestion(parseInt(e.target.value, 10) || 4)}
-                    className="wizard-input"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label>Negative Marking</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={negativeMarks}
-                    onChange={(e) => setNegativeMarks(parseInt(e.target.value, 10) || 0)}
-                    className="wizard-input"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label>Language</label>
+                  <label className="field-label">Language</label>
                   <select
                     value={selectedLang}
                     onChange={(e) => setSelectedLang(e.target.value as any)}
@@ -821,46 +935,109 @@ export default function PaperGeneratorView({
                 </div>
 
                 <div className="form-field">
-                  <label>Special Filters</label>
-                  <div className="checkboxes-col">
-                    <label className="checkbox-row">
+                  <label className="field-label">Marks / Correct</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={marksPerQuestion}
+                    onChange={(e) => setMarksPerQuestion(parseInt(e.target.value, 10) || 4)}
+                    className="wizard-input"
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label className="field-label">Negative Marks</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={negativeMarks}
+                    onChange={(e) => setNegativeMarks(parseInt(e.target.value, 10) || 0)}
+                    className="wizard-input"
+                  />
+                </div>
+
+                <div className="form-field full-col">
+                  <label className="field-label">Question Source Toggles</label>
+                  <div className="modern-toggles-grid">
+                    <label className="modern-toggle-card">
                       <input
                         type="checkbox"
                         checked={pyqOnly}
                         onChange={(e) => setPyqOnly(e.target.checked)}
+                        className="modern-toggle-input"
                       />
-                      <span>Previous Year Questions (PYQ) Only</span>
+                      <div className="toggle-custom-switch"></div>
+                      <div className="toggle-text-wrap">
+                        <span className="toggle-main-title">PYQ Only</span>
+                        <span className="toggle-sub-title">Only past competitive exam questions</span>
+                      </div>
                     </label>
-                    <label className="checkbox-row">
+
+                    <label className="modern-toggle-card">
                       <input
                         type="checkbox"
                         checked={hasImageOnly}
                         onChange={(e) => setHasImageOnly(e.target.checked)}
+                        className="modern-toggle-input"
                       />
-                      <span>Diagram / Image Questions Only</span>
+                      <div className="toggle-custom-switch"></div>
+                      <div className="toggle-text-wrap">
+                        <span className="toggle-main-title">Diagrams Only</span>
+                        <span className="toggle-sub-title">Only questions with visual diagrams</span>
+                      </div>
                     </label>
                   </div>
                 </div>
               </div>
 
-              {/* Difficulty Ratio Breakdown */}
+              {/* Elevated Difficulty Ratio Breakdown */}
               <div className="difficulty-ratio-box">
                 <div className="ratio-header-row">
-                  <span className="ratio-title">Difficulty Distribution Ratio</span>
-                  <span className="ratio-subtitle">
-                    Easy: {easyPct}% • Medium: {medPct}% • Hard: {hardPct}%
-                  </span>
+                  <span className="ratio-title">Difficulty Distribution (Proportion)</span>
+                  <div className="ratio-quick-presets">
+                    <button
+                      type="button"
+                      onClick={() => setDifficultyPreset(30, 50, 20)}
+                      className="btn-ratio-preset"
+                    >
+                      Balanced
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDifficultyPreset(60, 40, 0)}
+                      className="btn-ratio-preset"
+                    >
+                      Foundation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDifficultyPreset(15, 45, 40)}
+                      className="btn-ratio-preset"
+                    >
+                      Advanced
+                    </button>
+                  </div>
                 </div>
 
+                {/* Visual Ratio Segment Bar */}
                 <div className="ratio-visual-bar">
-                  <div className="bar-seg seg-easy" style={{ width: `${easyPct}%` }}>Easy {easyPct}%</div>
-                  <div className="bar-seg seg-med" style={{ width: `${medPct}%` }}>Medium {medPct}%</div>
-                  <div className="bar-seg seg-hard" style={{ width: `${hardPct}%` }}>Hard {hardPct}%</div>
+                  <div className="bar-seg seg-easy" style={{ width: `${easyPct}%` }}>
+                    {easyPct > 12 && `Easy ${easyPct}%`}
+                  </div>
+                  <div className="bar-seg seg-med" style={{ width: `${medPct}%` }}>
+                    {medPct > 12 && `Medium ${medPct}%`}
+                  </div>
+                  <div className="bar-seg seg-hard" style={{ width: `${hardPct}%` }}>
+                    {hardPct > 12 && `Hard ${hardPct}%`}
+                  </div>
                 </div>
 
                 <div className="ratio-sliders-row">
                   <div className="slider-item">
-                    <span className="slider-label">Easy (Tiers 0-1)</span>
+                    <div className="slider-meta-row">
+                      <span className="slider-dot dot-easy"></span>
+                      <span className="slider-label">Easy ({easyPct}%)</span>
+                    </div>
                     <input
                       type="range"
                       min={0}
@@ -878,7 +1055,10 @@ export default function PaperGeneratorView({
                   </div>
 
                   <div className="slider-item">
-                    <span className="slider-label">Medium (Tier 2)</span>
+                    <div className="slider-meta-row">
+                      <span className="slider-dot dot-med"></span>
+                      <span className="slider-label">Medium ({medPct}%)</span>
+                    </div>
                     <input
                       type="range"
                       min={0}
@@ -890,7 +1070,10 @@ export default function PaperGeneratorView({
                   </div>
 
                   <div className="slider-item">
-                    <span className="slider-label">Hard (Tiers 3-4)</span>
+                    <div className="slider-meta-row">
+                      <span className="slider-dot dot-hard"></span>
+                      <span className="slider-label">Hard ({hardPct}%)</span>
+                    </div>
                     <input
                       type="range"
                       min={0}
@@ -903,7 +1086,7 @@ export default function PaperGeneratorView({
                 </div>
               </div>
 
-              {/* Huge Generate Button */}
+              {/* Huge Radiant Generate Button */}
               <div className="wizard-action-footer">
                 <button
                   type="button"
@@ -911,8 +1094,12 @@ export default function PaperGeneratorView({
                   disabled={generating}
                   className="btn-huge-generate"
                 >
-                  <Sparkles size={18} />
-                  <span>{generating ? 'Generating from 5.27 Lakh Databank...' : `⚡ Generate ${totalQuestions} Questions Paper`}</span>
+                  <Sparkles size={20} className={generating ? 'animate-spin' : 'animate-pulse'} />
+                  <span>
+                    {generating
+                      ? 'Generating from 5.27 Lakh Databank...'
+                      : `⚡ Generate ${totalQuestions} Questions Examination Paper`}
+                  </span>
                 </button>
               </div>
             </div>
@@ -932,15 +1119,17 @@ export default function PaperGeneratorView({
 
             <div className="summary-stats-pills">
               <div className="stat-pill">
-                <span className="stat-label">Questions:</span>
+                <span className="stat-label">Total Qs:</span>
                 <span className="stat-value">{paperQuestions.length}</span>
               </div>
               <div className="stat-pill">
                 <span className="stat-label">Max Marks:</span>
-                <span className="stat-value">{totalMarks} (+{marksPerQuestion}/-{negativeMarks})</span>
+                <span className="stat-value font-mono">
+                  {totalMarks} (+{marksPerQuestion}/-{negativeMarks})
+                </span>
               </div>
               <div className="stat-pill">
-                <span className="stat-label">Difficulty:</span>
+                <span className="stat-label">Tiers:</span>
                 <span className="stat-value font-mono">
                   🟢 {easyCount} | 🟡 {medCount} | 🔴 {hardCount}
                 </span>
@@ -953,7 +1142,10 @@ export default function PaperGeneratorView({
             <div className="studio-editor-view hide-print">
               <div className="editor-instructions-card">
                 <div className="ins-header">
-                  <span>💡 Quick Teacher Controls:</span>
+                  <div className="ins-title-row">
+                    <PenTool size={15} className="text-emerald" />
+                    <span>Live Question Paper Studio Controls:</span>
+                  </div>
                   <button type="button" onClick={onNavigateToBank} className="btn-add-more-bank">
                     <Plus size={13} />
                     <span>Browse Question Bank to Add More</span>
@@ -969,9 +1161,13 @@ export default function PaperGeneratorView({
                 {paperQuestions.map((q, idx) => {
                   const qNum = idx + 1;
                   const isSwapping = swappingId === (q._id || q.id || idx);
+                  const diffTier = String(q.difficulty || '2');
 
                   return (
-                    <div key={q._id || q.id || idx} className="editor-question-card">
+                    <div
+                      key={q._id || q.id || idx}
+                      className={`editor-question-card tier-${diffTier}`}
+                    >
                       {/* Card Header Line */}
                       <div className="card-top-row">
                         <div className="card-top-left">
@@ -979,6 +1175,9 @@ export default function PaperGeneratorView({
                           <span className="q-id-tag">#{q.id}</span>
                           {q.topic && <span className="q-topic-tag">{q.topic}</span>}
                           {q.year && <span className="q-year-tag">{q.year}</span>}
+                          <span className={`badge-diff-pill diff-${diffTier}`}>
+                            {diffTier === '0' || diffTier === '1' ? 'Easy' : diffTier === '2' ? 'Medium' : 'Hard'}
+                          </span>
                         </div>
 
                         {/* Reorder and Swap Controls */}
@@ -1027,7 +1226,6 @@ export default function PaperGeneratorView({
                         <MathRenderer content={q.question} />
                         {q.question_image && (
                           <div className="editor-diagram-wrap">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={q.question_image}
                               alt={`Question ${qNum} diagram`}
@@ -1061,7 +1259,7 @@ export default function PaperGeneratorView({
                                     onClick={() => onImageZoom(opt.image || '', `Option (${opt.key})`)}
                                   />
                                 )}
-                                {isCorrect && <span className="badge-correct-indicator">✓ Answer</span>}
+                                {isCorrect && <span className="badge-correct-indicator">✓ Correct</span>}
                               </div>
                             );
                           })}
