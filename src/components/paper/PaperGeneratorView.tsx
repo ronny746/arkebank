@@ -85,7 +85,8 @@ export default function PaperGeneratorView({
   const [instituteName, setInstituteName] = useState<string>('ARKE SCHOLARS ACADEMY');
   const [marksPerQuestion, setMarksPerQuestion] = useState<number>(4);
   const [negativeMarks, setNegativeMarks] = useState<number>(1);
-  const [selectedLang, setSelectedLang] = useState<'all' | 'en' | 'hi'>('all');
+  const [selectedLang, setSelectedLang] = useState<'en' | 'hi'>('en');
+  const [switchingLang, setSwitchingLang] = useState(false);
   const [pyqOnly, setPyqOnly] = useState<boolean>(false);
   const [hasImageOnly, setHasImageOnly] = useState<boolean>(false);
 
@@ -379,15 +380,83 @@ export default function PaperGeneratorView({
     }
   };
 
-  // Toggle Language of individual question (EN <-> HI)
-  const handleToggleQuestionLang = (index: number) => {
-    const updated = [...paperQuestions];
-    const currentQ = updated[index];
+  // Toggle Language of individual question (EN <-> HI) with real MongoDB data fetching
+  const handleToggleQuestionLang = async (index: number) => {
+    const currentQ = paperQuestions[index];
     if (!currentQ) return;
-    const newLang = currentQ.lang === 'hi' ? 'en' : 'hi';
-    updated[index] = { ...currentQ, lang: newLang };
-    setPaperQuestions(updated);
-    showToast(`Question Q.${index + 1} language switched to ${newLang.toUpperCase()}`);
+    const currentLang = currentQ.lang ? String(currentQ.lang).toLowerCase() : 'en';
+    const targetLang = currentLang === 'hi' ? 'en' : 'hi';
+
+    try {
+      showToast(`Fetching ${targetLang === 'hi' ? 'Hindi' : 'English'} version for Q.${index + 1}...`);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('arke_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/questions/switch-lang', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          questionId: currentQ.id,
+          targetLang,
+          subject: currentQ.subject || selectedSubject,
+          topic: currentQ.topic,
+          difficulty: currentQ.difficulty,
+          marks: currentQ.marks,
+          negative_marks: currentQ.negative_marks,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.question) {
+        setPaperQuestions((prev) => {
+          const next = [...prev];
+          next[index] = { ...next[index], ...data.question, lang: targetLang };
+          return next;
+        });
+        showToast(`✓ Question Q.${index + 1} successfully switched to ${targetLang === 'hi' ? 'Hindi' : 'English'}!`);
+      } else {
+        showToast(`Could not find ${targetLang === 'hi' ? 'Hindi' : 'English'} version: ${data.error || 'Not found'}`);
+      }
+    } catch (err: any) {
+      showToast(`Error switching language: ${err.message}`);
+    }
+  };
+
+  // Switch all questions in the paper to English or Hindi
+  const handleSwitchPaperLanguage = async (targetLang: 'en' | 'hi') => {
+    if (paperQuestions.length === 0) return;
+    setSwitchingLang(true);
+    showToast(`Switching entire paper to ${targetLang === 'hi' ? 'Hindi (हिंदी)' : 'English'}...`);
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('arke_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/paper/switch-lang', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          questions: paperQuestions,
+          targetLang,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && Array.isArray(data.questions)) {
+        setPaperQuestions(data.questions);
+        showToast(`✓ Paper successfully converted to ${targetLang === 'hi' ? 'Hindi' : 'English'} (${data.questions.length} Qs)!`);
+      } else {
+        showToast(`Error switching paper language: ${data.error || 'Failed'}`);
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`);
+    } finally {
+      setSwitchingLang(false);
+    }
   };
 
   // Handle saved edit from EditTaggingModal
@@ -643,30 +712,36 @@ export default function PaperGeneratorView({
               <h3 className="card-heading">1. Target Class & Chapters</h3>
 
               <div className="form-fields-grid">
-                <div className="form-field">
+                <div className="form-field full-col">
                   <label className="field-label">Target Class / Stream</label>
-                  <select
-                    value={selectedClass}
-                    onChange={(e) => setSelectedClass(e.target.value)}
-                    className="wizard-select"
-                  >
+                  <div className="pill-grid">
                     {classesList.map((cls) => (
-                      <option key={cls} value={cls}>{cls}</option>
+                      <button
+                        key={cls}
+                        type="button"
+                        onClick={() => setSelectedClass(cls)}
+                        className={`pill-option ${selectedClass === cls ? 'active' : ''}`}
+                      >
+                        {cls}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
-                <div className="form-field">
+                <div className="form-field full-col">
                   <label className="field-label">Subject</label>
-                  <select
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="wizard-select"
-                  >
+                  <div className="pill-grid">
                     {subjectsList.map((sub) => (
-                      <option key={sub} value={sub}>{sub}</option>
+                      <button
+                        key={sub}
+                        type="button"
+                        onClick={() => setSelectedSubject(sub)}
+                        className={`pill-option ${selectedSubject === sub ? 'active' : ''}`}
+                      >
+                        {sub}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 <div className="form-field full-col">
@@ -789,17 +864,24 @@ export default function PaperGeneratorView({
                   />
                 </div>
 
-                <div className="form-field">
-                  <label className="field-label">Language</label>
-                  <select
-                    value={selectedLang}
-                    onChange={(e) => setSelectedLang(e.target.value as any)}
-                    className="wizard-select"
-                  >
-                    <option value="all">All Languages</option>
-                    <option value="en">English (en)</option>
-                    <option value="hi">Hindi (hi)</option>
-                  </select>
+                <div className="form-field full-col">
+                  <label className="field-label">Paper Language / माध्यम</label>
+                  <div className="pill-grid">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLang('en')}
+                      className={`pill-option ${selectedLang === 'en' ? 'active' : ''}`}
+                    >
+                      English (EN)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLang('hi')}
+                      className={`pill-option ${selectedLang === 'hi' ? 'active' : ''}`}
+                    >
+                      हिंदी (Hindi)
+                    </button>
+                  </div>
                 </div>
 
                 <div className="form-field">
@@ -931,6 +1013,28 @@ export default function PaperGeneratorView({
         <div className="paper-studio-container">
           {/* Paper Customization Toolbar (Options Style, Layout, Grid) */}
           <div className="paper-customization-toolbar hide-print">
+            <div className="toolbar-setting-group">
+              <span className="setting-label">Language:</span>
+              <div className="setting-pill-buttons">
+                <button
+                  type="button"
+                  disabled={switchingLang}
+                  onClick={() => handleSwitchPaperLanguage('en')}
+                  className={`btn-format-pill ${paperQuestions.some(q => (q.lang || 'en').toLowerCase() === 'en') ? 'active' : ''}`}
+                >
+                  English (EN)
+                </button>
+                <button
+                  type="button"
+                  disabled={switchingLang}
+                  onClick={() => handleSwitchPaperLanguage('hi')}
+                  className={`btn-format-pill ${paperQuestions.every(q => (q.lang || '').toLowerCase() === 'hi') ? 'active' : ''}`}
+                >
+                  {switchingLang ? 'Switching...' : 'हिंदी (HI)'}
+                </button>
+              </div>
+            </div>
+
             <div className="toolbar-setting-group">
               <span className="setting-label">Option Labels:</span>
               <div className="setting-pill-buttons">

@@ -192,7 +192,7 @@ export default function PaperPrintableDocument({
 
               {/* Options Grid */}
               {Array.isArray(q.options) && q.options.length > 0 && (
-                <div className={`paper-options-grid grid-${optionsLayout}`}>
+                <div className={`paper-options-grid grid-${columnsMode === "2-col" && optionsLayout === "4-col" ? "2-col" : optionsLayout}`}>
                   {q.options.map((opt) => {
                     const displayKey = formatOptionKey(opt.key);
                     const isCorrect = isSolutions && (

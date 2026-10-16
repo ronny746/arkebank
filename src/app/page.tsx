@@ -494,7 +494,7 @@ export default function Home() {
                   <>
                 {/* 1. Target Class / Stream */}
                 <div className="filter-group">
-                  <label className="filter-group-label">Class / Examination Target</label>
+                  <label className="filter-group-label">CLASS / EXAMINATION TARGET</label>
                   <div className="pill-grid">
                     <button
                       type="button"
@@ -505,9 +505,9 @@ export default function Home() {
                         setSelectedSubTopic('all');
                         setPage(1);
                       }}
-                      className={`pill-btn ${selectedClass === 'all' ? 'active' : ''}`}
+                      className={`pill-option ${selectedClass === 'all' ? 'active' : ''}`}
                     >
-                      All Classes
+                      All
                     </button>
                     {classesList.map((cls) => (
                       <button
@@ -520,7 +520,7 @@ export default function Home() {
                           setSelectedSubTopic('all');
                           setPage(1);
                         }}
-                        className={`pill-btn ${selectedClass === cls ? 'active' : ''}`}
+                        className={`pill-option ${selectedClass === cls ? 'active' : ''}`}
                       >
                         {cls}
                       </button>
@@ -530,7 +530,7 @@ export default function Home() {
 
                 {/* 2. Subject Selection */}
                 <div className="filter-group">
-                  <label className="filter-group-label">Subject</label>
+                  <label className="filter-group-label">SUBJECT</label>
                   <div className="pill-grid">
                     <button
                       type="button"
@@ -540,9 +540,9 @@ export default function Home() {
                         setSelectedSubTopic('all');
                         setPage(1);
                       }}
-                      className={`pill-btn ${selectedSubject === 'all' ? 'active' : ''}`}
+                      className={`pill-option ${selectedSubject === 'all' ? 'active' : ''}`}
                     >
-                      All Subjects
+                      All
                     </button>
                     {subjectsList.map((sub) => (
                       <button
@@ -554,7 +554,7 @@ export default function Home() {
                           setSelectedSubTopic('all');
                           setPage(1);
                         }}
-                        className={`pill-btn ${selectedSubject === sub ? 'active' : ''}`}
+                        className={`pill-option ${selectedSubject === sub ? 'active' : ''}`}
                       >
                         {sub}
                       </button>
@@ -564,9 +564,25 @@ export default function Home() {
 
                 {/* 3. Difficulty Level */}
                 <div className="filter-group">
-                  <label className="filter-group-label">Difficulty Tier</label>
+                  <label className="filter-group-label">DIFFICULTY LEVEL</label>
                   <div className="pill-grid">
-                    {difficultiesList.map((diff) => (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDifficulty('all');
+                        setPage(1);
+                      }}
+                      className={`pill-option ${selectedDifficulty === 'all' ? 'active' : ''}`}
+                    >
+                      All
+                    </button>
+                    {[
+                      { value: '0', label: 'Tier 0 (Basic)' },
+                      { value: '1', label: 'Tier 1 (Easy)' },
+                      { value: '2', label: 'Tier 2 (Medium)' },
+                      { value: '3', label: 'Tier 3 (Hard)' },
+                      { value: '4', label: 'Tier 4 (Expert)' },
+                    ].map((diff) => (
                       <button
                         key={diff.value}
                         type="button"
@@ -574,7 +590,7 @@ export default function Home() {
                           setSelectedDifficulty(diff.value);
                           setPage(1);
                         }}
-                        className={`pill-btn ${selectedDifficulty === diff.value ? 'active' : ''}`}
+                        className={`pill-option ${selectedDifficulty === diff.value ? 'active' : ''}`}
                       >
                         {diff.label}
                       </button>

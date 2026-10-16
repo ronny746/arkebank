@@ -399,31 +399,42 @@ body {
 .pill-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 6px;
 }
 
-.pill-option {
-  background-color: #F8FAFC;
-  border: 1px solid var(--card-border);
-  color: var(--text-body);
-  font-size: 0.74rem;
-  font-weight: 600;
-  padding: 0.25rem 0.55rem;
+.pill-option,
+.pill-btn {
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 4px 10px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  line-height: 1.25;
+  user-select: none;
 }
 
-.pill-option:hover {
-  background-color: #F1F5F9;
-  border-color: #CBD5E1;
+.pill-option:hover,
+.pill-btn:hover {
+  background-color: #F8FAFC;
+  border-color: #94A3B8;
+  color: #0F172A;
 }
 
-.pill-option.active {
-  background-color: var(--primary-navy);
-  color: var(--bg-white);
-  border-color: var(--primary-navy);
+.pill-option.active,
+.pill-btn.active {
+  background-color: #0F172A !important;
+  color: #FFFFFF !important;
+  border-color: #0F172A !important;
+  font-weight: 600;
 }
 
 /* Portal Selects */
@@ -5113,25 +5124,81 @@ body {
 /* Dual-Column Layout for Official Examination Sheet */
 .paper-questions-flow.cols-2-col {
   column-count: 2;
-  column-gap: 28px;
-  column-rule: 1px solid #E2E8F0;
+  column-gap: 32px;
+  column-rule: 1px solid #CBD5E1;
+  width: 100%;
 }
 
 .paper-questions-flow.cols-2-col .paper-question-block {
-  break-inside: avoid;
-  page-break-inside: avoid;
-  margin-bottom: 16px;
+  display: inline-block;
+  width: 100%;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+  -webkit-column-break-inside: avoid !important;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed #CBD5E1;
+  vertical-align: top;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-/* Grid layout modifiers for options */
-.options-grid.grid-4-col,
+/* In dual-column mode, 4-col is too cramped (~80px per option), so auto-format to 2x2 cleanly */
+.paper-questions-flow.cols-2-col .paper-options-grid,
+.paper-questions-flow.cols-2-col .paper-options-grid.grid-4-col {
+  grid-template-columns: 1fr 1fr !important;
+  gap: 6px 14px !important;
+}
+
 .paper-options-grid.grid-4-col {
-  grid-template-columns: repeat(4, 1fr) !important;
+  grid-template-columns: repeat(4, 1fr);
 }
 
-.options-grid.grid-1-col,
 .paper-options-grid.grid-1-col {
-  grid-template-columns: 1fr !important;
+  grid-template-columns: 1fr;
+}
+
+.paper-option-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.90rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  min-width: 0;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
+}
+
+.option-content-text {
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  flex: 1;
+}
+
+.option-img-wrap {
+  display: block;
+  max-width: 100%;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.paper-option-img {
+  max-width: 100%;
+  max-height: 85px;
+  object-fit: contain;
+  display: block;
+}
+
+.paper-diagram-img {
+  max-height: 180px;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+  margin: 6px 0;
 }
 
 @media print {
@@ -5143,5 +5210,14 @@ body {
     column-count: 2 !important;
     column-gap: 24px !important;
     column-rule: 1px solid #000000 !important;
+  }
+
+  .paper-questions-flow.cols-2-col .paper-question-block {
+    display: inline-block !important;
+    width: 100% !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+    border-bottom: 1px dashed #000000 !important;
   }
 }
