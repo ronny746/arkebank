@@ -9,6 +9,7 @@ import {
 } from '@/types/paper';
 import MathRenderer from '../MathRenderer';
 import PaperPrintableDocument from './PaperPrintableDocument';
+import EditTaggingModal from '../EditTaggingModal';
 import { 
   Sparkles, 
   Printer, 
@@ -38,20 +39,19 @@ import {
   Stethoscope,
   GraduationCap,
   Settings2,
-  CheckSquare,
-  Square,
-  SlidersHorizontal,
+  Calendar,
+  Pencil,
   ChevronDown,
-  Building2,
-  PenTool
+  ChevronUp,
+  Columns,
+  LayoutList,
+  Languages
 } from 'lucide-react';
 
 interface PaperGeneratorViewProps {
   classesList: string[];
   subjectsList: string[];
   topicsList: string[];
-  basketQuestions: QuestionItem[];
-  onClearBasket: () => void;
   onImageZoom: (url: string, title?: string) => void;
   showToast: (msg: string) => void;
   onNavigateToBank: () => void;
@@ -61,14 +61,17 @@ export default function PaperGeneratorView({
   classesList,
   subjectsList,
   topicsList,
-  basketQuestions,
-  onClearBasket,
   onImageZoom,
   showToast,
   onNavigateToBank,
 }: PaperGeneratorViewProps) {
-  // Active Studio Tab
+  // Active Studio Tab: editor | preview (student paper) | solutions (teacher key)
   const [studioTab, setStudioTab] = useState<'editor' | 'preview' | 'solutions'>('editor');
+
+  // Paper Formatting Options
+  const [optionFormat, setOptionFormat] = useState<'abcd' | '1234'>('abcd');
+  const [columnsMode, setColumnsMode] = useState<'1-col' | '2-col'>('1-col');
+  const [optionsLayout, setOptionsLayout] = useState<'2-col' | '4-col' | '1-col'>('2-col');
 
   // Generator Blueprint State
   const [selectedClass, setSelectedClass] = useState<string>(classesList[0] || 'Class 12');
@@ -105,6 +108,10 @@ export default function PaperGeneratorView({
   const [swappingId, setSwappingId] = useState<string | number | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
 
+  // Editing single question state via EditTaggingModal
+  const [editingQuestion, setEditingQuestion] = useState<QuestionItem | null>(null);
+  const [openSolutions, setOpenSolutions] = useState<Record<string | number, boolean>>({});
+
   // Load saved draft from localStorage on initial render
   useEffect(() => {
     try {
@@ -119,6 +126,9 @@ export default function PaperGeneratorView({
           if (parsed.selectedClass) setSelectedClass(parsed.selectedClass);
           if (parsed.selectedSubject) setSelectedSubject(parsed.selectedSubject);
           if (parsed.instructions) setInstructions(parsed.instructions);
+          if (parsed.optionFormat) setOptionFormat(parsed.optionFormat);
+          if (parsed.columnsMode) setColumnsMode(parsed.columnsMode);
+          if (parsed.optionsLayout) setOptionsLayout(parsed.optionsLayout);
         }
       }
     } catch (e) {
@@ -139,10 +149,13 @@ export default function PaperGeneratorView({
           selectedClass,
           selectedSubject,
           instructions,
+          optionFormat,
+          columnsMode,
+          optionsLayout,
         })
       );
     }
-  }, [paperQuestions, examTitle, instituteName, timeAllowed, selectedClass, selectedSubject, instructions]);
+  }, [paperQuestions, examTitle, instituteName, timeAllowed, selectedClass, selectedSubject, instructions, optionFormat, columnsMode, optionsLayout]);
 
   // Load topics dynamically when class/subject changes
   useEffect(() => {
@@ -160,7 +173,6 @@ export default function PaperGeneratorView({
           const data = await res.json();
           if (Array.isArray(data.topics) && data.topics.length > 0) {
             setAvailableTopics(data.topics);
-            // Default select all available topics
             setSelectedTopics(data.topics);
           } else {
             setAvailableTopics([]);
@@ -181,7 +193,7 @@ export default function PaperGeneratorView({
     return availableTopics.filter((t) => t.toLowerCase().includes(term));
   }, [availableTopics, chapterSearch]);
 
-  // Apply Pre-configured Blueprint Presets
+  // Apply Blueprint Presets
   const applyPreset = (preset: 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse') => {
     if (preset === 'balanced') {
       setTotalQuestions(25);
@@ -191,7 +203,7 @@ export default function PaperGeneratorView({
       setEasyPct(30);
       setMedPct(50);
       setHardPct(20);
-      setExamTitle(`${selectedSubject} Balanced Unit Test`);
+      setExamTitle(`${selectedSubject} Balanced Assessment`);
     } else if (preset === 'foundation') {
       setTotalQuestions(20);
       setTimeAllowed('45 Mins');
@@ -209,7 +221,7 @@ export default function PaperGeneratorView({
       setEasyPct(15);
       setMedPct(45);
       setHardPct(40);
-      setExamTitle(`${selectedSubject} Advanced Ranker Assessment`);
+      setExamTitle(`${selectedSubject} Advanced Ranker Test`);
     } else if (preset === 'jee_main') {
       setTotalQuestions(25);
       setTimeAllowed('60 Mins');
@@ -218,7 +230,7 @@ export default function PaperGeneratorView({
       setEasyPct(25);
       setMedPct(50);
       setHardPct(25);
-      setExamTitle(`JEE Main Pattern Mock Test - ${selectedSubject}`);
+      setExamTitle(`JEE Main Pattern Assessment - ${selectedSubject}`);
     } else if (preset === 'neet') {
       setTotalQuestions(45);
       setTimeAllowed('45 Mins');
@@ -227,7 +239,7 @@ export default function PaperGeneratorView({
       setEasyPct(40);
       setMedPct(45);
       setHardPct(15);
-      setExamTitle(`NEET Pattern Speed Drill - ${selectedSubject}`);
+      setExamTitle(`NEET Pattern Drill Mock - ${selectedSubject}`);
     } else if (preset === 'cbse') {
       setTotalQuestions(35);
       setTimeAllowed('180 Mins');
@@ -236,18 +248,11 @@ export default function PaperGeneratorView({
       setEasyPct(45);
       setMedPct(45);
       setHardPct(10);
-      setExamTitle(`CBSE Board Pattern Full Mock - ${selectedSubject}`);
+      setExamTitle(`CBSE Board Pattern Mock - ${selectedSubject}`);
     }
     showToast(`Loaded ${preset.toUpperCase()} blueprint pattern.`);
   };
 
-  const setDifficultyPreset = (easy: number, med: number, hard: number) => {
-    setEasyPct(easy);
-    setMedPct(med);
-    setHardPct(hard);
-  };
-
-  // Toggle single topic in selection
   const handleToggleTopic = (topicName: string) => {
     setSelectedTopics((prev) =>
       prev.includes(topicName)
@@ -308,18 +313,7 @@ export default function PaperGeneratorView({
     }
   };
 
-  // Load Basket Questions into Paper
-  const handleLoadBasketQuestions = () => {
-    if (basketQuestions.length === 0) {
-      showToast('No questions currently in Paper Basket.');
-      return;
-    }
-    setPaperQuestions([...basketQuestions]);
-    setStudioTab('editor');
-    showToast(`Loaded ${basketQuestions.length} questions from basket into Paper Studio!`);
-  };
-
-  // Reorder Questions (Move Up / Down)
+  // Move Question Up / Down
   const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= paperQuestions.length) return;
@@ -377,12 +371,39 @@ export default function PaperGeneratorView({
         negative_marks: currentQ.negative_marks || negativeMarks,
       };
       setPaperQuestions(updated);
-      showToast(`🔄 Question Q${index + 1} swapped with fresh question!`);
+      showToast(`🔄 Question Q.${index + 1} swapped with fresh question!`);
     } catch (err: any) {
       showToast(`Swap failed: ${err.message}`);
     } finally {
       setSwappingId(null);
     }
+  };
+
+  // Toggle Language of individual question (EN <-> HI)
+  const handleToggleQuestionLang = (index: number) => {
+    const updated = [...paperQuestions];
+    const currentQ = updated[index];
+    if (!currentQ) return;
+    const newLang = currentQ.lang === 'hi' ? 'en' : 'hi';
+    updated[index] = { ...currentQ, lang: newLang };
+    setPaperQuestions(updated);
+    showToast(`Question Q.${index + 1} language switched to ${newLang.toUpperCase()}`);
+  };
+
+  // Handle saved edit from EditTaggingModal
+  const handleQuestionEdited = (updatedQ: any) => {
+    setPaperQuestions((prev) =>
+      prev.map((q) =>
+        (q._id === updatedQ._id || q.id === updatedQ.id) ? { ...q, ...updatedQ } : q
+      )
+    );
+    setEditingQuestion(null);
+    showToast(`Question #${updatedQ.id} edited successfully in paper!`);
+  };
+
+  // Toggle Solution Dropdown per question
+  const toggleSolution = (id: string | number) => {
+    setOpenSolutions((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   // Save Paper
@@ -407,6 +428,9 @@ export default function PaperGeneratorView({
       updatedAt: new Date().toISOString(),
       questions: paperQuestions,
       instructions,
+      optionFormat,
+      columnsMode,
+      optionsLayout,
     };
 
     // 1. Save to Local Storage immediately
@@ -434,7 +458,7 @@ export default function PaperGeneratorView({
       if (res.ok) {
         showToast('💾 Paper saved successfully to Database and Local Storage!');
       } else {
-        showToast('Paper saved locally (Server sync offline).');
+        showToast('Paper saved locally.');
       }
     } catch (err) {
       showToast('Paper saved locally.');
@@ -460,11 +484,30 @@ export default function PaperGeneratorView({
     }
   };
 
-  // Compute stats for current paper
+  // Helpers for badge rendering
+  const getDifficultyBadge = (diff: any) => {
+    const val = String(diff);
+    if (val === '0') return <span className="badge badge-diff-basic">Basic (Tier 0)</span>;
+    if (val === '1') return <span className="badge badge-diff-easy">Easy (Tier 1)</span>;
+    if (val === '2') return <span className="badge badge-diff-med">Medium (Tier 2)</span>;
+    if (val === '3') return <span className="badge badge-diff-hard">Hard (Tier 3)</span>;
+    if (val === '4') return <span className="badge badge-diff-expert">Expert (Tier 4)</span>;
+    return <span className="badge badge-diff-med">Standard</span>;
+  };
+
+  const formatOptionKey = (key: string): string => {
+    const lower = (key || '').toLowerCase();
+    if (optionFormat === '1234') {
+      if (lower === 'a') return '1';
+      if (lower === 'b') return '2';
+      if (lower === 'c') return '3';
+      if (lower === 'd') return '4';
+      return key;
+    }
+    return key.toUpperCase();
+  };
+
   const totalMarks = paperQuestions.reduce((s, q) => s + (Number(q.marks) || 4), 0);
-  const easyCount = paperQuestions.filter((q) => ['0', '1', 0, 1].includes(q.difficulty as any)).length;
-  const medCount = paperQuestions.filter((q) => ['2', 2].includes(q.difficulty as any)).length;
-  const hardCount = paperQuestions.filter((q) => ['3', '4', 3, 4].includes(q.difficulty as any)).length;
 
   const currentMetadata: PaperMetadata = {
     title: examTitle,
@@ -484,13 +527,7 @@ export default function PaperGeneratorView({
       <div className="paper-studio-nav">
         <div className="studio-nav-left">
           <div className="studio-title-badge">
-            <div className="sparkle-circle-icon">
-              <Sparkles size={16} className="text-white" />
-            </div>
-            <div className="title-text-group">
-              <span className="studio-title-text">Paper Generator Studio</span>
-              <span className="studio-subtext-badge">5.27 Lakh Questions Active Engine</span>
-            </div>
+            <span className="studio-title-text">⚡ Question Paper Studio</span>
           </div>
 
           {paperQuestions.length > 0 && (
@@ -500,15 +537,14 @@ export default function PaperGeneratorView({
                 className={`studio-tab-btn ${studioTab === 'editor' ? 'active' : ''}`}
                 onClick={() => setStudioTab('editor')}
               >
-                <SlidersHorizontal size={14} />
-                <span>1. Organize & Edit ({paperQuestions.length})</span>
+                <span>1. Edit & Organize ({paperQuestions.length})</span>
               </button>
               <button
                 type="button"
                 className={`studio-tab-btn ${studioTab === 'preview' ? 'active' : ''}`}
                 onClick={() => setStudioTab('preview')}
               >
-                <Eye size={14} />
+                <Eye size={13} />
                 <span>2. Student Paper (Printable)</span>
               </button>
               <button
@@ -516,8 +552,8 @@ export default function PaperGeneratorView({
                 className={`studio-tab-btn ${studioTab === 'solutions' ? 'active' : ''}`}
                 onClick={() => setStudioTab('solutions')}
               >
-                <BookOpen size={14} />
-                <span>3. Teacher Solutions & Key</span>
+                <BookOpen size={13} />
+                <span>3. Teacher Solutions Booklet</span>
               </button>
             </div>
           )}
@@ -534,7 +570,7 @@ export default function PaperGeneratorView({
                 className="btn-studio-action btn-save"
                 title="Save paper to library"
               >
-                <Save size={14} />
+                <Save size={13} />
                 <span>{saving ? 'Saving...' : 'Save Paper'}</span>
               </button>
 
@@ -544,8 +580,8 @@ export default function PaperGeneratorView({
                 className="btn-studio-action btn-print-paper"
                 title="Print student question paper"
               >
-                <Printer size={14} />
-                <span>Print Paper</span>
+                <Printer size={13} />
+                <span>Print Student Paper</span>
               </button>
 
               <button
@@ -554,7 +590,7 @@ export default function PaperGeneratorView({
                 className="btn-studio-action btn-print-sol"
                 title="Print teacher solutions booklet"
               >
-                <FileText size={14} />
+                <FileText size={13} />
                 <span>Print Solutions</span>
               </button>
 
@@ -564,186 +600,47 @@ export default function PaperGeneratorView({
                 className="btn-studio-action btn-reset-paper"
                 title="Start a new paper"
               >
-                <RotateCcw size={13} />
+                <RotateCcw size={12} />
                 <span>New Paper</span>
               </button>
             </>
-          ) : (
-            basketQuestions.length > 0 && (
-              <button
-                type="button"
-                onClick={handleLoadBasketQuestions}
-                className="btn-studio-action btn-load-basket"
-              >
-                <Plus size={14} />
-                <span>Load {basketQuestions.length} Qs from Basket</span>
-              </button>
-            )
-          )}
+          ) : null}
         </div>
       </div>
 
-      {/* STATE 1: Setup Blueprint Wizard */}
+      {/* STATE 1: Blueprint Generator Form */}
       {paperQuestions.length === 0 ? (
         <div className="generator-wizard-container">
-          {/* Hero Banner with Sleek Mesh & Gradient */}
-          <div className="wizard-hero-card">
-            <div className="wizard-hero-left">
-              <div className="hero-tag-pill">
-                <Zap size={13} className="text-emerald" />
-                <span>AI-Assisted Blueprint Assessment Engine</span>
-              </div>
-              <h2 className="hero-title">Create Perfect Exam Papers in Seconds</h2>
-              <p className="hero-desc">
-                Select your examination pattern, choose specific chapters or full syllabus, and customize difficulty. 
-                Our high-speed engine intelligently draws high-yield, balanced questions without duplicates.
-              </p>
-            </div>
-
-            {basketQuestions.length > 0 ? (
-              <div className="basket-callout-card">
-                <div className="basket-callout-info">
-                  <span className="callout-count">{basketQuestions.length} Questions</span>
-                  <span className="callout-text">Selected in your Question Basket</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleLoadBasketQuestions}
-                  className="btn-callout-load"
-                >
-                  <Plus size={14} />
-                  <span>Build Paper with Basket</span>
-                </button>
-              </div>
-            ) : (
-              <div className="hero-quick-tip-card">
-                <span className="tip-badge">PRO TIP</span>
-                <p>Browse Question Bank anytime and click <b>+ Add to Paper</b> to cherry-pick questions manually!</p>
-                <button type="button" onClick={onNavigateToBank} className="btn-tip-browse">
-                  Browse Bank
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* 1-Click Blueprint Presets */}
-          <div className="wizard-section">
-            <div className="section-label-row">
-              <div className="label-with-icon">
-                <Sparkles size={16} className="text-emerald" />
-                <span className="section-label">1-Click Exam Presets</span>
-              </div>
-              <span className="section-subtext">Click any preset to instantly auto-configure blueprint pattern</span>
-            </div>
-
-            <div className="presets-grid">
-              <button
-                type="button"
-                className="preset-pill-card preset-balanced"
-                onClick={() => applyPreset('balanced')}
-              >
-                <div className="preset-icon-wrap icon-balanced">
-                  <Zap size={18} />
-                </div>
-                <div className="preset-card-body">
-                  <div className="preset-name">Balanced Unit Test</div>
-                  <div className="preset-meta">25 Qs • 100 Marks • 60 Mins</div>
-                  <div className="preset-tag">30% Easy • 50% Med • 20% Hard</div>
-                </div>
+          {/* Preset Buttons Bar */}
+          <div className="presets-bar">
+            <span className="presets-bar-label">1-Click Presets:</span>
+            <div className="presets-pills-row">
+              <button type="button" onClick={() => applyPreset('balanced')} className="preset-chip">
+                ⚡ Balanced (25 Qs • 60m)
               </button>
-
-              <button
-                type="button"
-                className="preset-pill-card preset-jee"
-                onClick={() => applyPreset('jee_main')}
-              >
-                <div className="preset-icon-wrap icon-jee">
-                  <Target size={18} />
-                </div>
-                <div className="preset-card-body">
-                  <div className="preset-name">JEE Main Pattern</div>
-                  <div className="preset-meta">25 MCQs • 100 Marks • +4/-1</div>
-                  <div className="preset-tag">Official NTA Pattern</div>
-                </div>
+              <button type="button" onClick={() => applyPreset('jee_main')} className="preset-chip">
+                🎯 JEE Main (25 Qs • +4/-1)
               </button>
-
-              <button
-                type="button"
-                className="preset-pill-card preset-neet"
-                onClick={() => applyPreset('neet')}
-              >
-                <div className="preset-icon-wrap icon-neet">
-                  <Stethoscope size={18} />
-                </div>
-                <div className="preset-card-body">
-                  <div className="preset-name">NEET Drill Mock</div>
-                  <div className="preset-meta">45 MCQs • 180 Marks • +4/-1</div>
-                  <div className="preset-tag">Medical Speed Test</div>
-                </div>
+              <button type="button" onClick={() => applyPreset('neet')} className="preset-chip">
+                🩺 NEET Mock (45 Qs)
               </button>
-
-              <button
-                type="button"
-                className="preset-pill-card preset-cbse"
-                onClick={() => applyPreset('cbse')}
-              >
-                <div className="preset-icon-wrap icon-cbse">
-                  <GraduationCap size={18} />
-                </div>
-                <div className="preset-card-body">
-                  <div className="preset-name">CBSE Board Mock</div>
-                  <div className="preset-meta">35 Qs • 70 Marks • 180 Mins</div>
-                  <div className="preset-tag">Board Syllabus Focus</div>
-                </div>
+              <button type="button" onClick={() => applyPreset('cbse')} className="preset-chip">
+                📖 CBSE Board (35 Qs)
               </button>
-
-              <button
-                type="button"
-                className="preset-pill-card preset-foundation"
-                onClick={() => applyPreset('foundation')}
-              >
-                <div className="preset-icon-wrap icon-foundation">
-                  <BookOpen size={18} />
-                </div>
-                <div className="preset-card-body">
-                  <div className="preset-name">Foundation Builder</div>
-                  <div className="preset-meta">20 Qs • 60 Marks • 45 Mins</div>
-                  <div className="preset-tag">60% Easy • 40% Medium</div>
-                </div>
+              <button type="button" onClick={() => applyPreset('foundation')} className="preset-chip">
+                🌱 Foundation (20 Qs)
               </button>
-
-              <button
-                type="button"
-                className="preset-pill-card preset-advanced"
-                onClick={() => applyPreset('advanced')}
-              >
-                <div className="preset-icon-wrap icon-advanced">
-                  <Award size={18} />
-                </div>
-                <div className="preset-card-body">
-                  <div className="preset-name">Advanced Challenger</div>
-                  <div className="preset-meta">30 Qs • 120 Marks • +4/-2</div>
-                  <div className="preset-tag">High Difficulty Drill</div>
-                </div>
+              <button type="button" onClick={() => applyPreset('advanced')} className="preset-chip">
+                🔥 Advanced (30 Qs)
               </button>
             </div>
           </div>
 
-          {/* Configuration Form Grid */}
+          {/* Configuration Two-Column Grid */}
           <div className="wizard-form-grid">
-            {/* Card 1: Examination & Syllabus */}
+            {/* Left Card: Target Class & Chapters */}
             <div className="wizard-card">
-              <div className="card-heading-row">
-                <div className="card-heading-left">
-                  <div className="card-icon-badge">
-                    <PenTool size={16} />
-                  </div>
-                  <div>
-                    <h3 className="card-heading">1. Target Class & Chapters</h3>
-                    <p className="card-subhead">Choose target curriculum and syllabus coverage</p>
-                  </div>
-                </div>
-              </div>
+              <h3 className="card-heading">1. Target Class & Chapters</h3>
 
               <div className="form-fields-grid">
                 <div className="form-field">
@@ -773,12 +670,12 @@ export default function PaperGeneratorView({
                 </div>
 
                 <div className="form-field full-col">
-                  <label className="field-label">Exam Title & Purpose</label>
+                  <label className="field-label">Exam Title</label>
                   <input
                     type="text"
                     value={examTitle}
                     onChange={(e) => setExamTitle(e.target.value)}
-                    placeholder="e.g. JEE Main Mock Assessment #1"
+                    placeholder="e.g. JEE Main Full Assessment 2026"
                     className="wizard-input"
                   />
                 </div>
@@ -795,56 +692,39 @@ export default function PaperGeneratorView({
                 </div>
               </div>
 
-              {/* Enhanced Chapter / Topics Multi-Selector */}
+              {/* Chapters Selector with Search */}
               <div className="topics-selection-box">
                 <div className="topics-header-row">
-                  <div className="topics-title-group">
-                    <label className="field-label">
-                      Select Target Chapters ({selectedTopics.length}/{availableTopics.length})
-                    </label>
-                  </div>
+                  <label className="field-label">
+                    Select Target Chapters ({selectedTopics.length}/{availableTopics.length})
+                  </label>
                   <div className="topics-quick-actions">
-                    <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">
-                      Select All
-                    </button>
+                    <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">Select All</button>
                     <span className="dot-sep">•</span>
-                    <button type="button" onClick={handleClearAllTopics} className="btn-text-action">
-                      Clear All
-                    </button>
+                    <button type="button" onClick={handleClearAllTopics} className="btn-text-action">Clear All</button>
                   </div>
                 </div>
 
-                {/* Chapter Search Box */}
+                {/* Search Chapters */}
                 <div className="chapter-search-wrap">
                   <Search size={14} className="chapter-search-icon" />
                   <input
                     type="text"
-                    placeholder="Search chapters (e.g. Optics, Mechanics, Thermodynamics)..."
+                    placeholder="Filter chapters (e.g. Optics, Mechanics, Thermodynamics)..."
                     value={chapterSearch}
                     onChange={(e) => setChapterSearch(e.target.value)}
                     className="chapter-search-input"
                   />
                   {chapterSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setChapterSearch('')}
-                      className="chapter-search-clear"
-                    >
-                      ×
-                    </button>
+                    <button type="button" onClick={() => setChapterSearch('')} className="chapter-search-clear">×</button>
                   )}
                 </div>
 
                 <div className="topics-chips-scroll">
                   {availableTopics.length === 0 ? (
-                    <div className="no-topics-notice">
-                      <Clock size={16} className="animate-spin text-muted" />
-                      <span>Loading syllabus chapters from database...</span>
-                    </div>
+                    <div className="no-topics-notice">Loading chapters from syllabus database...</div>
                   ) : filteredTopics.length === 0 ? (
-                    <div className="no-topics-notice">
-                      <span>No chapters found matching &ldquo;{chapterSearch}&rdquo;</span>
-                    </div>
+                    <div className="no-topics-notice">No chapters matching &ldquo;{chapterSearch}&rdquo;</div>
                   ) : (
                     filteredTopics.map((top) => {
                       const isChecked = selectedTopics.includes(top);
@@ -855,9 +735,7 @@ export default function PaperGeneratorView({
                           onClick={() => handleToggleTopic(top)}
                           className={`topic-chip ${isChecked ? 'active' : ''}`}
                         >
-                          <span className="chip-indicator">
-                            {isChecked ? <Check size={12} /> : <Plus size={12} />}
-                          </span>
+                          <span className="chip-indicator">{isChecked ? '✓' : '+'}</span>
                           <span className="chip-text">{top}</span>
                         </button>
                       );
@@ -867,19 +745,9 @@ export default function PaperGeneratorView({
               </div>
             </div>
 
-            {/* Card 2: Question Blueprint & Distribution */}
+            {/* Right Card: Question Blueprint & Difficulty */}
             <div className="wizard-card">
-              <div className="card-heading-row">
-                <div className="card-heading-left">
-                  <div className="card-icon-badge">
-                    <Settings2 size={16} />
-                  </div>
-                  <div>
-                    <h3 className="card-heading">2. Question Count & Difficulty</h3>
-                    <p className="card-subhead">Control marks, time, and tier balance</p>
-                  </div>
-                </div>
-              </div>
+              <h3 className="card-heading">2. Question Count & Difficulty Balance</h3>
 
               <div className="form-fields-grid">
                 <div className="form-field full-col">
@@ -957,87 +825,46 @@ export default function PaperGeneratorView({
                 </div>
 
                 <div className="form-field full-col">
-                  <label className="field-label">Question Source Toggles</label>
-                  <div className="modern-toggles-grid">
-                    <label className="modern-toggle-card">
+                  <label className="field-label">Question Filters</label>
+                  <div className="checkboxes-row">
+                    <label className="checkbox-item">
                       <input
                         type="checkbox"
                         checked={pyqOnly}
                         onChange={(e) => setPyqOnly(e.target.checked)}
-                        className="modern-toggle-input"
                       />
-                      <div className="toggle-custom-switch"></div>
-                      <div className="toggle-text-wrap">
-                        <span className="toggle-main-title">PYQ Only</span>
-                        <span className="toggle-sub-title">Only past competitive exam questions</span>
-                      </div>
+                      <span>Previous Year Questions (PYQ) Only</span>
                     </label>
-
-                    <label className="modern-toggle-card">
+                    <label className="checkbox-item">
                       <input
                         type="checkbox"
                         checked={hasImageOnly}
                         onChange={(e) => setHasImageOnly(e.target.checked)}
-                        className="modern-toggle-input"
                       />
-                      <div className="toggle-custom-switch"></div>
-                      <div className="toggle-text-wrap">
-                        <span className="toggle-main-title">Diagrams Only</span>
-                        <span className="toggle-sub-title">Only questions with visual diagrams</span>
-                      </div>
+                      <span>Diagrams Only</span>
                     </label>
                   </div>
                 </div>
               </div>
 
-              {/* Elevated Difficulty Ratio Breakdown */}
+              {/* Difficulty Ratio Breakdown */}
               <div className="difficulty-ratio-box">
                 <div className="ratio-header-row">
-                  <span className="ratio-title">Difficulty Distribution (Proportion)</span>
-                  <div className="ratio-quick-presets">
-                    <button
-                      type="button"
-                      onClick={() => setDifficultyPreset(30, 50, 20)}
-                      className="btn-ratio-preset"
-                    >
-                      Balanced
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDifficultyPreset(60, 40, 0)}
-                      className="btn-ratio-preset"
-                    >
-                      Foundation
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDifficultyPreset(15, 45, 40)}
-                      className="btn-ratio-preset"
-                    >
-                      Advanced
-                    </button>
-                  </div>
+                  <span className="ratio-title">Difficulty Distribution</span>
+                  <span className="ratio-subtitle">
+                    Easy: {easyPct}% • Med: {medPct}% • Hard: {hardPct}%
+                  </span>
                 </div>
 
-                {/* Visual Ratio Segment Bar */}
                 <div className="ratio-visual-bar">
-                  <div className="bar-seg seg-easy" style={{ width: `${easyPct}%` }}>
-                    {easyPct > 12 && `Easy ${easyPct}%`}
-                  </div>
-                  <div className="bar-seg seg-med" style={{ width: `${medPct}%` }}>
-                    {medPct > 12 && `Medium ${medPct}%`}
-                  </div>
-                  <div className="bar-seg seg-hard" style={{ width: `${hardPct}%` }}>
-                    {hardPct > 12 && `Hard ${hardPct}%`}
-                  </div>
+                  <div className="bar-seg seg-easy" style={{ width: `${easyPct}%` }}>Easy {easyPct}%</div>
+                  <div className="bar-seg seg-med" style={{ width: `${medPct}%` }}>Medium {medPct}%</div>
+                  <div className="bar-seg seg-hard" style={{ width: `${hardPct}%` }}>Hard {hardPct}%</div>
                 </div>
 
                 <div className="ratio-sliders-row">
                   <div className="slider-item">
-                    <div className="slider-meta-row">
-                      <span className="slider-dot dot-easy"></span>
-                      <span className="slider-label">Easy ({easyPct}%)</span>
-                    </div>
+                    <span className="slider-label">Easy ({easyPct}%)</span>
                     <input
                       type="range"
                       min={0}
@@ -1055,10 +882,7 @@ export default function PaperGeneratorView({
                   </div>
 
                   <div className="slider-item">
-                    <div className="slider-meta-row">
-                      <span className="slider-dot dot-med"></span>
-                      <span className="slider-label">Medium ({medPct}%)</span>
-                    </div>
+                    <span className="slider-label">Medium ({medPct}%)</span>
                     <input
                       type="range"
                       min={0}
@@ -1070,10 +894,7 @@ export default function PaperGeneratorView({
                   </div>
 
                   <div className="slider-item">
-                    <div className="slider-meta-row">
-                      <span className="slider-dot dot-hard"></span>
-                      <span className="slider-label">Hard ({hardPct}%)</span>
-                    </div>
+                    <span className="slider-label">Hard ({hardPct}%)</span>
                     <input
                       type="range"
                       min={0}
@@ -1086,7 +907,7 @@ export default function PaperGeneratorView({
                 </div>
               </div>
 
-              {/* Huge Radiant Generate Button */}
+              {/* Generate Button */}
               <div className="wizard-action-footer">
                 <button
                   type="button"
@@ -1094,11 +915,11 @@ export default function PaperGeneratorView({
                   disabled={generating}
                   className="btn-huge-generate"
                 >
-                  <Sparkles size={20} className={generating ? 'animate-spin' : 'animate-pulse'} />
+                  <Sparkles size={16} />
                   <span>
                     {generating
                       ? 'Generating from 5.27 Lakh Databank...'
-                      : `⚡ Generate ${totalQuestions} Questions Examination Paper`}
+                      : `⚡ Generate ${totalQuestions} Questions Paper`}
                   </span>
                 </button>
               </div>
@@ -1108,6 +929,76 @@ export default function PaperGeneratorView({
       ) : (
         /* STATE 2: Interactive Paper Studio (Organize / Student Paper / Solutions) */
         <div className="paper-studio-container">
+          {/* Paper Customization Toolbar (Options Style, Layout, Grid) */}
+          <div className="paper-customization-toolbar hide-print">
+            <div className="toolbar-setting-group">
+              <span className="setting-label">Option Labels:</span>
+              <div className="setting-pill-buttons">
+                <button
+                  type="button"
+                  onClick={() => setOptionFormat('abcd')}
+                  className={`btn-format-pill ${optionFormat === 'abcd' ? 'active' : ''}`}
+                >
+                  (A), (B), (C), (D)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOptionFormat('1234')}
+                  className={`btn-format-pill ${optionFormat === '1234' ? 'active' : ''}`}
+                >
+                  (1), (2), (3), (4)
+                </button>
+              </div>
+            </div>
+
+            <div className="toolbar-setting-group">
+              <span className="setting-label">Print Layout:</span>
+              <div className="setting-pill-buttons">
+                <button
+                  type="button"
+                  onClick={() => setColumnsMode('1-col')}
+                  className={`btn-format-pill ${columnsMode === '1-col' ? 'active' : ''}`}
+                >
+                  Single Column
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setColumnsMode('2-col')}
+                  className={`btn-format-pill ${columnsMode === '2-col' ? 'active' : ''}`}
+                >
+                  Dual Column (2 Pages)
+                </button>
+              </div>
+            </div>
+
+            <div className="toolbar-setting-group">
+              <span className="setting-label">Options Grid:</span>
+              <div className="setting-pill-buttons">
+                <button
+                  type="button"
+                  onClick={() => setOptionsLayout('2-col')}
+                  className={`btn-format-pill ${optionsLayout === '2-col' ? 'active' : ''}`}
+                >
+                  2x2 Grid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOptionsLayout('4-col')}
+                  className={`btn-format-pill ${optionsLayout === '4-col' ? 'active' : ''}`}
+                >
+                  4 Columns (Row)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOptionsLayout('1-col')}
+                  className={`btn-format-pill ${optionsLayout === '1-col' ? 'active' : ''}`}
+                >
+                  Vertical
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Studio Summary Bar */}
           <div className="studio-summary-bar hide-print">
             <div className="summary-left">
@@ -1119,20 +1010,12 @@ export default function PaperGeneratorView({
 
             <div className="summary-stats-pills">
               <div className="stat-pill">
-                <span className="stat-label">Total Qs:</span>
+                <span className="stat-label">Questions:</span>
                 <span className="stat-value">{paperQuestions.length}</span>
               </div>
               <div className="stat-pill">
                 <span className="stat-label">Max Marks:</span>
-                <span className="stat-value font-mono">
-                  {totalMarks} (+{marksPerQuestion}/-{negativeMarks})
-                </span>
-              </div>
-              <div className="stat-pill">
-                <span className="stat-label">Tiers:</span>
-                <span className="stat-value font-mono">
-                  🟢 {easyCount} | 🟡 {medCount} | 🔴 {hardCount}
-                </span>
+                <span className="stat-value">{totalMarks} (+{marksPerQuestion}/-{negativeMarks})</span>
               </div>
             </div>
           </div>
@@ -1140,129 +1023,216 @@ export default function PaperGeneratorView({
           {/* TAB 1: Editor & Reordering Workspace */}
           {studioTab === 'editor' && (
             <div className="studio-editor-view hide-print">
-              <div className="editor-instructions-card">
-                <div className="ins-header">
-                  <div className="ins-title-row">
-                    <PenTool size={15} className="text-emerald" />
-                    <span>Live Question Paper Studio Controls:</span>
-                  </div>
-                  <button type="button" onClick={onNavigateToBank} className="btn-add-more-bank">
-                    <Plus size={13} />
-                    <span>Browse Question Bank to Add More</span>
-                  </button>
-                </div>
-                <div className="ins-body">
-                  Use <b>Move Up / Down</b> to resequence questions. Click <b>🔄 Swap Question</b> to instantly replace any question with another matching question from the same chapter without duplicates.
-                </div>
-              </div>
-
-              {/* Questions List */}
               <div className="editor-questions-list">
                 {paperQuestions.map((q, idx) => {
                   const qNum = idx + 1;
                   const isSwapping = swappingId === (q._id || q.id || idx);
-                  const diffTier = String(q.difficulty || '2');
+                  const isSolutionOpen = Boolean(openSolutions[q._id || q.id || idx]);
 
                   return (
-                    <div
-                      key={q._id || q.id || idx}
-                      className={`editor-question-card tier-${diffTier}`}
-                    >
-                      {/* Card Header Line */}
+                    <div key={q._id || q.id || idx} className="question-card">
+                      {/* Card Header matching exact Question Bank style */}
                       <div className="card-top-row">
-                        <div className="card-top-left">
-                          <span className="q-sequence-badge">Q{qNum}</span>
-                          <span className="q-id-tag">#{q.id}</span>
-                          {q.topic && <span className="q-topic-tag">{q.topic}</span>}
-                          {q.year && <span className="q-year-tag">{q.year}</span>}
-                          <span className={`badge-diff-pill diff-${diffTier}`}>
-                            {diffTier === '0' || diffTier === '1' ? 'Easy' : diffTier === '2' ? 'Medium' : 'Hard'}
-                          </span>
+                        <div className="card-left-badges">
+                          <span className="q-index-pill">Q.{qNum}</span>
+                          <span className="badge badge-subject">{q.subject || selectedSubject}</span>
+                          <span className="badge badge-class">{q.class_std || selectedClass}</span>
+                          {getDifficultyBadge(q.difficulty)}
+                          {q.year && Number(q.year) > 0 ? (
+                            <span className="badge badge-pyq">
+                              <Calendar size={11} />
+                              <span>PYQ {q.year}</span>
+                            </span>
+                          ) : null}
+                          {/* Language Switcher Badge */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleQuestionLang(idx)}
+                            className="badge badge-lang"
+                            title="Click to toggle English / Hindi"
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <Languages size={10} style={{ marginRight: '2px' }} />
+                            <span>{q.lang ? String(q.lang).toUpperCase() : 'EN'}</span>
+                          </button>
                         </div>
 
-                        {/* Reorder and Swap Controls */}
-                        <div className="card-top-actions">
+                        {/* Right Action Buttons Toolbar */}
+                        <div className="card-right-actions">
+                          <span className="badge badge-id">#{q.id}</span>
+
+                          {/* Reorder Up/Down */}
                           <button
                             type="button"
                             onClick={() => handleMoveQuestion(idx, 'up')}
                             disabled={idx === 0}
-                            className="btn-order-action"
+                            className="btn-card-action"
                             title="Move Question Up"
+                            style={{ padding: '4px 6px' }}
                           >
-                            <ArrowUp size={14} />
+                            <ArrowUp size={12} />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleMoveQuestion(idx, 'down')}
                             disabled={idx === paperQuestions.length - 1}
-                            className="btn-order-action"
+                            className="btn-card-action"
                             title="Move Question Down"
+                            style={{ padding: '4px 6px' }}
                           >
-                            <ArrowDown size={14} />
+                            <ArrowDown size={12} />
                           </button>
+
+                          {/* Replace / Swap Question */}
                           <button
                             type="button"
                             onClick={() => handleSwapQuestion(idx)}
                             disabled={isSwapping}
-                            className="btn-swap-action"
-                            title="Swap with similar question from bank"
+                            className="btn-card-action btn-swap-tag"
+                            title="Replace with similar question from bank"
                           >
-                            <RefreshCw size={13} className={isSwapping ? 'animate-spin' : ''} />
-                            <span>{isSwapping ? 'Swapping...' : 'Swap Question'}</span>
+                            <RefreshCw size={12} className={isSwapping ? 'animate-spin' : ''} />
+                            <span>{isSwapping ? 'Swapping...' : 'Replace Question'}</span>
                           </button>
+
+                          {/* Edit Question */}
+                          <button
+                            type="button"
+                            onClick={() => setEditingQuestion(q)}
+                            className="btn-card-action btn-edit-tag"
+                            title="Edit question text, formula, options & solution"
+                          >
+                            <Pencil size={12} />
+                            <span>Edit Question</span>
+                          </button>
+
+                          {/* Remove Question */}
                           <button
                             type="button"
                             onClick={() => handleDeleteQuestion(idx)}
-                            className="btn-delete-action"
+                            className="btn-card-action btn-del-tag"
                             title="Remove from paper"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={12} />
                           </button>
                         </div>
                       </div>
 
-                      {/* Question Body */}
-                      <div className="card-q-body">
+                      {/* Breadcrumb Hierarchy */}
+                      {(q.topic || q.sub_topic) && (
+                        <div className="taxonomy-breadcrumb">
+                          <BookOpen size={12} className="crumb-icon" />
+                          <span className="crumb-topic">{q.topic || 'General Topic'}</span>
+                          {q.sub_topic && (
+                            <>
+                              <span className="crumb-sep">›</span>
+                              <span className="crumb-subtopic">{q.sub_topic}</span>
+                            </>
+                          )}
+                          <span className="crumb-sep">•</span>
+                          <span className="crumb-marks">Marks: +{q.marks || marksPerQuestion} / -{q.negative_marks || negativeMarks}</span>
+                        </div>
+                      )}
+
+                      {/* Question Stem Text */}
+                      <div className="card-question-text">
                         <MathRenderer content={q.question} />
+
                         {q.question_image && (
-                          <div className="editor-diagram-wrap">
+                          <div className="q-diagram-container">
                             <img
                               src={q.question_image}
                               alt={`Question ${qNum} diagram`}
-                              className="editor-diagram-img"
+                              className="diagram-image-preview"
                               onClick={() => onImageZoom(q.question_image || '', `Question ${qNum} Diagram`)}
                             />
                           </div>
                         )}
                       </div>
 
-                      {/* Options Grid */}
-                      {Array.isArray(q.options) && (
-                        <div className="card-options-compact-grid">
+                      {/* Options Grid (2x2 or as customized) */}
+                      {Array.isArray(q.options) && q.options.length > 0 && (
+                        <div className={`options-grid ${optionsLayout === '4-col' ? 'grid-4-col' : optionsLayout === '1-col' ? 'grid-1-col' : ''}`}>
                           {q.options.map((opt) => {
                             const isCorrect = (
                               (q.correct_option && q.correct_option.toLowerCase() === opt.key?.toLowerCase()) ||
                               (q.correct_answer && q.correct_answer.toLowerCase() === opt.key?.toLowerCase())
                             );
+                            const displayLetter = formatOptionKey(opt.key);
+
                             return (
                               <div
                                 key={opt.key}
-                                className={`compact-opt-item ${isCorrect ? 'opt-correct' : ''}`}
+                                className={`option-card ${isCorrect ? 'option-correct' : ''}`}
                               >
-                                <span className="opt-key">({opt.key?.toUpperCase()})</span>
-                                {opt.text && <MathRenderer content={opt.text} inline />}
-                                {opt.image && (
-                                  <img
-                                    src={opt.image}
-                                    alt={`Option ${opt.key}`}
-                                    className="opt-thumb-img"
-                                    onClick={() => onImageZoom(opt.image || '', `Option (${opt.key})`)}
-                                  />
+                                <span className={`option-letter ${isCorrect ? 'letter-correct' : ''}`}>
+                                  {displayLetter}
+                                </span>
+                                <div className="option-body">
+                                  {opt.text && <MathRenderer content={opt.text} inline />}
+                                  {opt.image && (
+                                    <div className="option-image-wrap">
+                                      <img
+                                        src={opt.image}
+                                        alt={`Option ${displayLetter}`}
+                                        className="option-preview-img"
+                                        onClick={() => onImageZoom(opt.image || '', `Option (${displayLetter})`)}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                                {isCorrect && (
+                                  <span className="option-correct-badge" title="Verified Correct Option">
+                                    <CheckCircle2 size={13} />
+                                  </span>
                                 )}
-                                {isCorrect && <span className="badge-correct-indicator">✓ Correct</span>}
                               </div>
                             );
                           })}
+                        </div>
+                      )}
+
+                      {/* Verified Editorial Solution Dropdown */}
+                      <div className="card-footer-row">
+                        <button
+                          type="button"
+                          onClick={() => toggleSolution(q._id || q.id || idx)}
+                          className="btn-toggle-solution"
+                        >
+                          <Layers size={13} />
+                          <span>View Verified Editorial Solution & Proof</span>
+                          {isSolutionOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        </button>
+                      </div>
+
+                      {/* Expanded Solution Drawer */}
+                      {isSolutionOpen && (
+                        <div className="solution-drawer">
+                          <div className="solution-drawer-header">
+                            <span className="sol-badge">
+                              Correct Option: ({formatOptionKey(q.correct_option || q.correct_answer || '')})
+                            </span>
+                            <span className="sol-heading-text">Editorial Solution & Step-by-Step Proof</span>
+                          </div>
+
+                          <div className="solution-body">
+                            {q.solution ? (
+                              <MathRenderer content={q.solution} />
+                            ) : (
+                              <p className="no-sol-text">No detailed editorial solution text recorded.</p>
+                            )}
+
+                            {q.solution_image && (
+                              <div className="sol-diagram-wrap">
+                                <img
+                                  src={q.solution_image}
+                                  alt={`Solution diagram for Q${qNum}`}
+                                  className="solution-diagram-img"
+                                  onClick={() => onImageZoom(q.solution_image || '', `Solution ${qNum} Diagram`)}
+                                />
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1284,8 +1254,8 @@ export default function PaperGeneratorView({
                   onClick={() => window.print()}
                   className="btn-toolbar-print"
                 >
-                  <Printer size={15} />
-                  <span>Print / Save as PDF (Student Paper)</span>
+                  <Printer size={14} />
+                  <span>Print Student Paper (PDF)</span>
                 </button>
               </div>
 
@@ -1294,6 +1264,9 @@ export default function PaperGeneratorView({
                 questions={paperQuestions}
                 mode="paper"
                 onImageZoom={onImageZoom}
+                optionFormat={optionFormat}
+                columnsMode={columnsMode}
+                optionsLayout={optionsLayout}
               />
             </div>
           )}
@@ -1310,8 +1283,8 @@ export default function PaperGeneratorView({
                   onClick={() => window.print()}
                   className="btn-toolbar-print"
                 >
-                  <Printer size={15} />
-                  <span>Print / Save as PDF (Solutions Booklet)</span>
+                  <Printer size={14} />
+                  <span>Print Solutions Booklet (PDF)</span>
                 </button>
               </div>
 
@@ -1320,10 +1293,24 @@ export default function PaperGeneratorView({
                 questions={paperQuestions}
                 mode="solutions"
                 onImageZoom={onImageZoom}
+                optionFormat={optionFormat}
+                columnsMode={columnsMode}
+                optionsLayout={optionsLayout}
               />
             </div>
           )}
         </div>
+      )}
+
+      {/* Edit Question Modal (Opens when teacher clicks 'Edit Question' on any question) */}
+      {editingQuestion && (
+        <EditTaggingModal
+          question={editingQuestion}
+          onClose={() => setEditingQuestion(null)}
+          onSaved={handleQuestionEdited}
+          availableClasses={classesList}
+          availableSubjects={subjectsList}
+        />
       )}
     </div>
   );

@@ -4960,3 +4960,188 @@ body {
     opacity: 0.08 !important;
   }
 }
+
+/* ==========================================================================
+   PAPER STUDIO CUSTOMIZATION TOOLBAR & DUAL-COLUMN PRINT STYLING
+   ========================================================================== */
+
+.paper-customization-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #FFFFFF;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 10px 18px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.toolbar-setting-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setting-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.setting-pill-buttons {
+  display: inline-flex;
+  align-items: center;
+  background: #F1F5F9;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 2px;
+}
+
+.btn-format-pill {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #64748B;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-format-pill:hover {
+  color: var(--text-dark);
+}
+
+.btn-format-pill.active {
+  background: #FFFFFF;
+  color: var(--primary-navy);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Card Action Button overrides for Paper Studio */
+.btn-swap-tag {
+  background: #ECFDF5 !important;
+  color: #047857 !important;
+  border: 1px solid #A7F3D0 !important;
+}
+
+.btn-swap-tag:hover {
+  background: #D1FAE5 !important;
+}
+
+.btn-del-tag {
+  background: #FEF2F2 !important;
+  color: #EF4444 !important;
+  border: 1px solid #FECACA !important;
+}
+
+.btn-del-tag:hover {
+  background: #FEE2E2 !important;
+}
+
+/* Presets Bar */
+.presets-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #FFFFFF;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px 18px;
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+
+.presets-bar-label {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+
+.presets-pills-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-chip {
+  background: #F8FAFC;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preset-chip:hover {
+  border-color: var(--brand-emerald);
+  background: var(--brand-emerald-subtle);
+  color: var(--brand-emerald-dark);
+  transform: translateY(-1px);
+}
+
+/* Checkboxes Row in Wizard */
+.checkboxes-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+/* Dual-Column Layout for Official Examination Sheet */
+.paper-questions-flow.cols-2-col {
+  column-count: 2;
+  column-gap: 28px;
+  column-rule: 1px solid #E2E8F0;
+}
+
+.paper-questions-flow.cols-2-col .paper-question-block {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin-bottom: 16px;
+}
+
+/* Grid layout modifiers for options */
+.options-grid.grid-4-col,
+.paper-options-grid.grid-4-col {
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+
+.options-grid.grid-1-col,
+.paper-options-grid.grid-1-col {
+  grid-template-columns: 1fr !important;
+}
+
+@media print {
+  .paper-customization-toolbar {
+    display: none !important;
+  }
+
+  .paper-questions-flow.cols-2-col {
+    column-count: 2 !important;
+    column-gap: 24px !important;
+    column-rule: 1px solid #000000 !important;
+  }
+}

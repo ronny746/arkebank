@@ -4,13 +4,15 @@ import React from 'react';
 import Image from 'next/image';
 import { QuestionItem, PaperMetadata } from '@/types/paper';
 import MathRenderer from '../MathRenderer';
-import { CheckCircle2, Award, Clock, Calendar, FileText } from 'lucide-react';
 
 interface PaperPrintableDocumentProps {
   metadata: PaperMetadata;
   questions: QuestionItem[];
   mode: 'paper' | 'solutions'; // 'paper' = student test, 'solutions' = teacher booklet
   onImageZoom?: (url: string, title?: string) => void;
+  optionFormat?: 'abcd' | '1234';
+  columnsMode?: '1-col' | '2-col';
+  optionsLayout?: '2-col' | '4-col' | '1-col';
 }
 
 export default function PaperPrintableDocument({
@@ -18,6 +20,9 @@ export default function PaperPrintableDocument({
   questions,
   mode,
   onImageZoom,
+  optionFormat = 'abcd',
+  columnsMode = '1-col',
+  optionsLayout = '2-col',
 }: PaperPrintableDocumentProps) {
   const isSolutions = mode === 'solutions';
 
@@ -25,8 +30,21 @@ export default function PaperPrintableDocument({
   const totalQuestions = questions.length;
   const totalMarks = questions.reduce((sum, q) => sum + (Number(q.marks) || 4), 0);
 
+  // Helper for option key display: A/B/C/D or 1/2/3/4
+  const formatOptionKey = (key: string): string => {
+    const lower = (key || '').toLowerCase();
+    if (optionFormat === '1234') {
+      if (lower === 'a') return '1';
+      if (lower === 'b') return '2';
+      if (lower === 'c') return '3';
+      if (lower === 'd') return '4';
+      return key;
+    }
+    return key.toUpperCase();
+  };
+
   return (
-    <div className={`paper-printable-root ${isSolutions ? 'mode-solutions' : 'mode-paper'}`}>
+    <div className={`paper-printable-root ${isSolutions ? 'mode-solutions' : 'mode-paper'} layout-${columnsMode}`}>
       {/* Watermark (for authentic official exam look) */}
       {metadata.showWatermark !== false && (
         <div className="paper-watermark">
@@ -41,14 +59,14 @@ export default function PaperPrintableDocument({
             <Image
               src="/logo.png"
               alt="Logo"
-              width={60}
-              height={48}
+              width={56}
+              height={44}
               className="paper-header-logo"
             />
           </div>
           <div className="exam-titles-box">
             <h1 className="exam-institute-name">{metadata.instituteName || 'ARKE SCHOLARS ACADEMY'}</h1>
-            <h2 className="exam-paper-title">{metadata.title || 'Comprehensive Assessment Test'}</h2>
+            <h2 className="exam-paper-title">{metadata.title || 'Comprehensive Assessment Examination'}</h2>
             {isSolutions && (
               <span className="exam-solutions-tag">TEACHER EVALUATION & DETAILED SOLUTIONS BOOKLET</span>
             )}
@@ -58,7 +76,7 @@ export default function PaperPrintableDocument({
         {/* Exam Meta Specs Grid */}
         <div className="exam-meta-grid">
           <div className="meta-col">
-            <span className="meta-label">Class / Target:</span>
+            <span className="meta-label">Class:</span>
             <span className="meta-val">{metadata.class_std || 'All Classes'}</span>
           </div>
           <div className="meta-col">
@@ -83,11 +101,11 @@ export default function PaperPrintableDocument({
           </div>
         </div>
 
-        {/* Candidate Details Box (for Student Examination Paper) */}
+        {/* Candidate Details Box (Student Examination Paper) */}
         {!isSolutions && (
           <div className="candidate-details-box">
             <div className="candidate-field">
-              <span className="candidate-label">Student Name:</span>
+              <span className="candidate-label">Candidate Name:</span>
               <span className="candidate-line"></span>
             </div>
             <div className="candidate-field">
@@ -120,11 +138,12 @@ export default function PaperPrintableDocument({
           <div className="matrix-title">QUICK ANSWER KEY GRID</div>
           <div className="matrix-grid">
             {questions.map((q, idx) => {
-              const opt = (q.correct_option || q.correct_answer || '-').toUpperCase();
+              const rawOpt = q.correct_option || q.correct_answer || '-';
+              const formattedOpt = formatOptionKey(rawOpt);
               return (
                 <div key={q._id || idx} className="matrix-cell">
                   <span className="cell-num">Q{idx + 1}</span>
-                  <span className="cell-opt">{opt}</span>
+                  <span className="cell-opt">({formattedOpt})</span>
                 </div>
               );
             })}
@@ -132,8 +151,8 @@ export default function PaperPrintableDocument({
         </div>
       )}
 
-      {/* Questions Flow */}
-      <div className="paper-questions-list">
+      {/* Questions Flow (Single Column or Dual Column Layout) */}
+      <div className={`paper-questions-flow cols-${columnsMode}`}>
         {questions.map((q, idx) => {
           const qNumber = idx + 1;
           const qMarks = Number(q.marks) || 4;
@@ -150,18 +169,17 @@ export default function PaperPrintableDocument({
                   )}
                 </div>
                 <div className="paper-q-marks-box">
-                  <span className="marks-badge">[{qMarks} Marks | -{qNeg}]</span>
+                  <span className="marks-badge">[{qMarks} M | -{qNeg}]</span>
                 </div>
               </div>
 
-              {/* Question Stem Text */}
+              {/* Question Body */}
               <div className="paper-q-body">
                 <MathRenderer content={q.question} />
 
                 {/* Question Diagram / Image */}
                 {q.question_image && (
                   <div className="paper-q-image-container">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={q.question_image}
                       alt={`Question ${qNumber} diagram`}
@@ -172,11 +190,11 @@ export default function PaperPrintableDocument({
                 )}
               </div>
 
-              {/* Options Grid (4 options: A, B, C, D) */}
+              {/* Options Grid */}
               {Array.isArray(q.options) && q.options.length > 0 && (
-                <div className="paper-options-grid">
+                <div className={`paper-options-grid grid-${optionsLayout}`}>
                   {q.options.map((opt) => {
-                    const optKey = (opt.key || '').toUpperCase();
+                    const displayKey = formatOptionKey(opt.key);
                     const isCorrect = isSolutions && (
                       (q.correct_option && q.correct_option.toLowerCase() === opt.key?.toLowerCase()) ||
                       (q.correct_answer && q.correct_answer.toLowerCase() === opt.key?.toLowerCase())
@@ -188,18 +206,17 @@ export default function PaperPrintableDocument({
                         className={`paper-option-item ${isCorrect ? 'option-correct-highlight' : ''}`}
                       >
                         <span className={`option-letter-badge ${isCorrect ? 'badge-correct' : ''}`}>
-                          ({optKey})
+                          ({displayKey})
                         </span>
                         <div className="option-content-text">
                           {opt.text && <MathRenderer content={opt.text} inline />}
                           {opt.image && (
                             <div className="option-img-wrap">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={opt.image}
-                                alt={`Option ${optKey}`}
+                                alt={`Option ${displayKey}`}
                                 className="paper-option-img"
-                                onClick={() => onImageZoom && onImageZoom(opt.image || '', `Option (${optKey}) Diagram`)}
+                                onClick={() => onImageZoom && onImageZoom(opt.image || '', `Option (${displayKey}) Diagram`)}
                               />
                             </div>
                           )}
@@ -217,19 +234,22 @@ export default function PaperPrintableDocument({
               {isSolutions && (
                 <div className="paper-solution-box">
                   <div className="solution-box-header">
-                    <span className="sol-badge">Correct Answer: Option ({(q.correct_option || q.correct_answer || '').toUpperCase()})</span>
-                    <span className="sol-heading">Step-by-Step Solution & Conceptual Breakdown</span>
+                    <span className="sol-badge">
+                      Correct: Option ({formatOptionKey(q.correct_option || q.correct_answer || '')})
+                    </span>
+                    <span className="sol-heading">Step-by-Step Editorial Solution</span>
                   </div>
                   <div className="solution-box-body">
                     {q.solution ? (
                       <MathRenderer content={q.solution} />
                     ) : (
-                      <p className="no-sol-text">Direct conceptual question. Correct answer confirmed as Option ({(q.correct_option || q.correct_answer || '').toUpperCase()}).</p>
+                      <p className="no-sol-text">
+                        Correct answer confirmed as Option ({formatOptionKey(q.correct_option || q.correct_answer || '')}).
+                      </p>
                     )}
 
                     {q.solution_image && (
                       <div className="paper-sol-image-container">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={q.solution_image}
                           alt={`Solution diagram for Q${qNumber}`}

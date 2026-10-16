@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import PaperGeneratorView from '@/components/paper/PaperGeneratorView';
 import SavedPapersView from '@/components/paper/SavedPapersView';
-import PaperBasketDrawer from '@/components/paper/PaperBasketDrawer';
 import { QuestionItem, SavedPaper } from '@/types/paper';
 import LoginForm from '@/components/LoginForm';
 import QuestionCard from '@/components/QuestionCard';
@@ -429,9 +428,6 @@ export default function Home() {
         >
           <Sparkles size={15} className="text-emerald" />
           <span>⚡ Paper Generator</span>
-          {basketQuestions.length > 0 && (
-            <span className="nav-tab-badge">{basketQuestions.length}</span>
-          )}
         </button>
 
         <button
@@ -876,8 +872,6 @@ export default function Home() {
                       onImageZoom={(url, title) => setZoomImage({ url, title })}
                       onInspectTags={(questionData) => setInspectedQuestion(questionData)}
                       onEditTags={(questionData) => setEditingQuestion(questionData)}
-                      isInBasket={basketQuestions.some((item) => (item._id || item.id) === (q._id || q.id))}
-                      onToggleBasket={handleToggleBasket}
                     />
                   ))}
                 </div>
@@ -926,13 +920,7 @@ export default function Home() {
             </main>
           </div>
 
-          {/* Floating Question Paper Basket Drawer */}
-          <PaperBasketDrawer
-            basketQuestions={basketQuestions}
-            onRemoveQuestion={handleRemoveFromBasket}
-            onClearBasket={handleClearBasket}
-            onOpenGenerator={() => setActiveNavTab('generator')}
-          />
+
         </>
       )}
 
@@ -942,8 +930,6 @@ export default function Home() {
           classesList={classesList}
           subjectsList={subjectsList}
           topicsList={topicsList}
-          basketQuestions={basketQuestions}
-          onClearBasket={handleClearBasket}
           onImageZoom={(url, title) => setZoomImage({ url, title })}
           showToast={showToast}
           onNavigateToBank={() => setActiveNavTab('bank')}
