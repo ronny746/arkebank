@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       lang = 'all',
       hasImageOnly = false,
       pyqOnly = false,
-      mcqOnly = true,
+      questionType = 'all', // 'all' (mix) | 'mcq' | 'subjective' | 'numerical' | 'true_false'
       marksPerQuestion = 4,
       negativeMarks = 1,
     } = body;
@@ -74,9 +74,21 @@ export async function POST(req: Request) {
     if (pyqOnly) {
       baseMatch.year = { $gt: 1990 };
     }
-    if (mcqOnly !== false) {
+    // Question type filtering (MCQ, Subjective, Numerical, True/False, or Mix)
+    if (questionType === 'mcq') {
       baseMatch['options.0.text'] = { $exists: true, $ne: '' };
+    } else if (questionType === 'subjective') {
+      baseMatch['options.0.text'] = '';
+    } else if (questionType === 'numerical') {
+      baseMatch['options.0.text'] = '';
+      baseMatch['correct_answer'] = { $exists: true, $ne: '' };
+    } else if (questionType === 'true_false') {
+      baseMatch['$or'] = [
+        { question: { $regex: 'true or false|सत्य या असत्य|सत्य/असत्य', $options: 'i' } },
+        { 'options.0.text': { $regex: '^true$|^false$|^सत्य$|^असत्य$', $options: 'i' } },
+      ];
     }
+    // If questionType is 'all' or 'mix', no filter is applied so all question types are naturally mixed!
 
     const { db } = await connectToDatabase();
     const questionsCol = db.collection('questions');

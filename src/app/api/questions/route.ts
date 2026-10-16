@@ -32,6 +32,7 @@ export async function GET(req: Request) {
     const year = searchParams.get('year');
     const exam = searchParams.get('exam');
     const has_image = searchParams.get('has_image');
+    const question_type = searchParams.get('question_type');
     const search = searchParams.get('search');
 
     const query: any = {};
@@ -60,6 +61,20 @@ export async function GET(req: Request) {
     if (exam && exam !== 'all') {
       query.question_exams = { $regex: exam, $options: 'i' };
     }
+    if (question_type === 'mcq') {
+      query['options.0.text'] = { $exists: true, $ne: '' };
+    } else if (question_type === 'subjective') {
+      query['options.0.text'] = '';
+    } else if (question_type === 'numerical') {
+      query['options.0.text'] = '';
+      query['correct_answer'] = { $exists: true, $ne: '' };
+    } else if (question_type === 'true_false') {
+      query['$or'] = [
+        { question: { $regex: 'true or false|सत्य या असत्य|सत्य/असत्य', $options: 'i' } },
+        { 'options.0.text': { $regex: '^true$|^false$|^सत्य$|^असत्य$', $options: 'i' } }
+      ];
+    }
+
     if (has_image === 'true') {
       query.$or = [
         { question_image: { $ne: '' } },

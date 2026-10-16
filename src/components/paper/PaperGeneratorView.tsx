@@ -121,6 +121,7 @@ export default function PaperGeneratorView({
   const [switchingLang, setSwitchingLang] = useState(false);
   const [pyqOnly, setPyqOnly] = useState<boolean>(false);
   const [hasImageOnly, setHasImageOnly] = useState<boolean>(false);
+  const [questionType, setQuestionType] = useState<'all' | 'mcq' | 'subjective' | 'numerical' | 'true_false'>('all');
 
   const isMultiSubjectExam = ['NEET', 'JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass);
   const eligibleSubjects = useMemo(() => {
@@ -471,7 +472,7 @@ export default function PaperGeneratorView({
           class_std: selectedClass, subject: pickerSubject, subjects: selectedSubjects,
           topics: [previewTopic], totalQuestions: remaining, lang: selectedLang,
           difficultyDistribution: { easy: easyPct, medium: medPct, hard: hardPct },
-          hasImageOnly, pyqOnly, marksPerQuestion, negativeMarks,
+          hasImageOnly, pyqOnly, questionType, marksPerQuestion, negativeMarks,
         }),
       });
       const data = await response.json();
@@ -509,7 +510,9 @@ export default function PaperGeneratorView({
       setPreviewLoading(true);
       try {
         const token = localStorage.getItem('arke_token');
-        const query = new URLSearchParams({ page: '1', limit: '8', class_std: selectedClass, topic: previewTopic, lang: selectedLang });
+        const queryParams: Record<string, string> = { page: '1', limit: '12', class_std: selectedClass, topic: previewTopic, lang: selectedLang };
+        if (questionType !== 'all') queryParams.question_type = questionType;
+        const query = new URLSearchParams(queryParams);
         if (!isMultiSubjectExam) query.set('subject', selectedSubject);
         const response = await fetch(`/api/questions?${query}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include' });
         const data = await response.json();
@@ -523,7 +526,7 @@ export default function PaperGeneratorView({
     void loadPreview();
   // Topic selection is explicit; this fetch is intentionally scoped to its latest selection.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewTopic, selectedClass, selectedLang, selectedSubject, isMultiSubjectExam]);
+  }, [previewTopic, selectedClass, selectedLang, selectedSubject, isMultiSubjectExam, questionType]);
 
   // Generate Paper API Call
   const handleGeneratePaper = async () => {
@@ -558,6 +561,7 @@ export default function PaperGeneratorView({
           lang: selectedLang,
           hasImageOnly,
           pyqOnly,
+          questionType,
           marksPerQuestion,
           negativeMarks,
         }),
@@ -1036,6 +1040,33 @@ export default function PaperGeneratorView({
                   </div>
                 </div>
 
+                {/* Question Type / Pattern Selector */}
+                <div className="form-field full-col">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="field-label" style={{ marginBottom: 0 }}>Question Pattern / Format (प्रश्न प्रकार)</label>
+                    <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>Select format or mix all</span>
+                  </div>
+                  <div className="pill-grid question-type-grid">
+                    {[
+                      { id: 'all', label: '🔀 Mix of All Types', title: 'MCQ + Numerical + Subjective mixed' },
+                      { id: 'mcq', label: '🔘 MCQ Only', title: 'Only multiple choice (4 options A, B, C, D)' },
+                      { id: 'subjective', label: '✍️ Subjective / Theory', title: 'Descriptive and theory questions' },
+                      { id: 'numerical', label: '🔢 Numerical / Integer', title: 'Integer / numerical problems' },
+                      { id: 'true_false', label: '⚖️ True / False', title: 'True or False statements' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setQuestionType(item.id as any)}
+                        className={`pill-option ${questionType === item.id ? 'active' : ''}`}
+                        title={item.title}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="form-field full-col">
                   <label className="field-label">Exam Title</label>
                   <input
@@ -1153,7 +1184,29 @@ export default function PaperGeneratorView({
                   <div className="topic-preview-header">
                     <div>
                       <span>{replacementIndex !== null ? 'REPLACE QUESTION' : 'QUESTION PICKER'}</span>
-                      <h4>{replacementIndex !== null ? `Choose a replacement for Question ${replacementIndex + 1}${previewTopic ? ` · ${previewTopic}` : ''}` : previewTopic ? `${previewTopic} questions` : 'Choose a chapter to inspect questions'}</h4>
+                      <div>
+                        <h4>{replacementIndex !== null ? `Choose a replacement for Question ${replacementIndex + 1}${previewTopic ? ` · ${previewTopic}` : ''}` : previewTopic ? `${previewTopic} questions` : 'Choose a chapter to inspect questions'}</h4>
+                        {previewTopic && (
+                          <div className="picker-type-filter-row">
+                            {[
+                              { id: 'all', label: 'All' },
+                              { id: 'mcq', label: 'MCQs' },
+                              { id: 'subjective', label: 'Subjective' },
+                              { id: 'numerical', label: 'Numerical' },
+                              { id: 'true_false', label: 'True/False' },
+                            ].map((t) => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => setQuestionType(t.id as any)}
+                                className={`picker-type-btn ${questionType === t.id ? 'active' : ''}`}
+                              >
+                                {t.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="topic-preview-actions">
                       <div className="slots-inline-bar" title="Change target slots for this paper">
@@ -1342,6 +1395,29 @@ export default function PaperGeneratorView({
                     onChange={(e) => setNegativeMarks(parseInt(e.target.value, 10) || 0)}
                     className="wizard-input"
                   />
+                </div>
+
+                {/* Question Type Pattern in Step 3 */}
+                <div className="form-field full-col">
+                  <label className="field-label">Question Pattern (प्रश्न प्रकार)</label>
+                  <div className="pill-grid question-type-grid">
+                    {[
+                      { id: 'all', label: '🔀 Mix All Types' },
+                      { id: 'mcq', label: '🔘 MCQ Only' },
+                      { id: 'subjective', label: '✍️ Subjective' },
+                      { id: 'numerical', label: '🔢 Numerical' },
+                      { id: 'true_false', label: '⚖️ True / False' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setQuestionType(item.id as any)}
+                        className={`pill-option ${questionType === item.id ? 'active' : ''}`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="form-field full-col">
@@ -1632,6 +1708,25 @@ export default function PaperGeneratorView({
                           <span className="q-index-pill">Q.{qNum}</span>
                           <span className="badge badge-subject">{q.subject || selectedSubject}</span>
                           <span className="badge badge-class">{q.class_std || selectedClass}</span>
+                          {(() => {
+                            const hasValidOptions = Array.isArray(q.options) && q.options.some((opt) => (opt.text && opt.text.trim().length > 0) || (opt.image && opt.image.trim().length > 0));
+                            const qLower = (q.question || '').toLowerCase();
+                            let typeLabel = 'MCQ';
+                            let typeClass = 'badge-qtype-mcq';
+
+                            if (qLower.includes('true or false') || qLower.includes('सत्य या असत्य') || qLower.includes('सत्य/असत्य')) {
+                              typeLabel = 'True / False';
+                              typeClass = 'badge-qtype-tf';
+                            } else if (!hasValidOptions && q.correct_answer && String(q.correct_answer).trim().length > 0) {
+                              typeLabel = 'Numerical';
+                              typeClass = 'badge-qtype-num';
+                            } else if (!hasValidOptions) {
+                              typeLabel = 'Subjective';
+                              typeClass = 'badge-qtype-subj';
+                            }
+
+                            return <span className={`badge ${typeClass}`}>{typeLabel}</span>;
+                          })()}
                           {getDifficultyBadge(q.difficulty)}
                           {q.year && Number(q.year) > 0 ? (
                             <span className="badge badge-pyq">
@@ -1761,10 +1856,13 @@ export default function PaperGeneratorView({
                         )}
                       </div>
 
-                      {/* Options Grid (2x2 or as customized) */}
-                      {Array.isArray(q.options) && q.options.length > 0 && (
+                      {/* Options Grid (or Numerical/Subjective Indicator) */}
+                      {(() => {
+                        const hasValidOptions = Array.isArray(q.options) && q.options.some((opt) => (opt.text && opt.text.trim().length > 0) || (opt.image && opt.image.trim().length > 0));
+                        if (hasValidOptions) {
+                          return (
                         <div className={`options-grid ${optionsLayout === '4-col' ? 'grid-4-col' : optionsLayout === '1-col' ? 'grid-1-col' : ''}`}>
-                          {q.options.map((opt) => {
+                          {q.options?.map((opt) => {
                             const isCorrect = (
                               (q.correct_option && q.correct_option.toLowerCase() === opt.key?.toLowerCase()) ||
                               (q.correct_answer && q.correct_answer.toLowerCase() === opt.key?.toLowerCase())
@@ -1801,7 +1899,24 @@ export default function PaperGeneratorView({
                             );
                           })}
                         </div>
-                      )}
+                          );
+                        } else {
+                          return (
+                            <div className="non-mcq-response-box">
+                              {q.correct_answer ? (
+                                <div className="numerical-ans-callout">
+                                  <span className="num-callout-tag">🔢 Numerical / Correct Key:</span>
+                                  <span className="num-callout-val"><MathRenderer content={String(q.correct_answer)} inline /></span>
+                                </div>
+                              ) : (
+                                <div className="subjective-ans-callout">
+                                  <span>✍️ Subjective / Theory Question (Descriptive response)</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                      })()}
 
                       {/* Verified Editorial Solution Dropdown */}
                       <div className="card-footer-row">

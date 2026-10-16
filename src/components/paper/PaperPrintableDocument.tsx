@@ -191,9 +191,12 @@ export default function PaperPrintableDocument({
               </div>
 
               {/* Options Grid */}
-              {Array.isArray(q.options) && q.options.length > 0 && (
+              {(() => {
+                const hasValidOptions = Array.isArray(q.options) && q.options.some((opt) => (opt.text && opt.text.trim().length > 0) || (opt.image && opt.image.trim().length > 0));
+                if (hasValidOptions) {
+                  return (
                 <div className={`paper-options-grid grid-${columnsMode === "2-col" && optionsLayout === "4-col" ? "2-col" : optionsLayout}`}>
-                  {q.options.map((opt) => {
+                  {q.options?.map((opt) => {
                     const displayKey = formatOptionKey(opt.key);
                     const isCorrect = isSolutions && (
                       (q.correct_option && q.correct_option.toLowerCase() === opt.key?.toLowerCase()) ||
@@ -228,7 +231,19 @@ export default function PaperPrintableDocument({
                     );
                   })}
                 </div>
-              )}
+                  );
+                } else {
+                  return !isSolutions ? (
+                    <div className="paper-subjective-space" style={{ margin: '8px 0', fontSize: '0.84rem', color: '#64748B' }}>
+                      <span>Ans: ____________________________________________________________________</span>
+                    </div>
+                  ) : q.correct_answer ? (
+                    <div className="paper-numerical-answer" style={{ margin: '6px 0', fontSize: '0.86rem', color: '#047857' }}>
+                      <b>Correct Answer:</b> <MathRenderer content={String(q.correct_answer)} inline />
+                    </div>
+                  ) : null;
+                }
+              })()}
 
               {/* Step-by-Step Solution & Explanation (Only in Solutions Booklet Mode) */}
               {isSolutions && (
