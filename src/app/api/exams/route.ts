@@ -49,5 +49,11 @@ export async function POST(req: Request) {
   };
   const { db } = await connectToDatabase();
   await db.collection('exams').insertOne(exam);
-  return NextResponse.json({ success: true, exam, publicUrl: `/e/${exam.slug}` }, { status: 201 });
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://bank.arkescholar.com").replace(/\/$/, "");
+  return NextResponse.json({
+    success: true,
+    exam,
+    publicUrl: `/e/${exam.slug}`,
+    liveUrl: `${baseUrl}/e/${exam.slug}`,
+  }, { status: 201 });
 }

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Activity, ArrowLeft, BarChart3, CheckCircle2, Clock3, Copy, Download, Radio, RefreshCw, ShieldAlert, Users } from 'lucide-react';
+import { Activity, ArrowLeft, BarChart3, CheckCircle2, Clock3, Copy, Download, Radio, RefreshCw, ShieldAlert, Users, ExternalLink, Globe } from 'lucide-react';
+import { getPublicExamUrl } from '@/lib/public-url';
 import type { OnlineExam } from '@/types/exam';
 
 type ManagedExam = OnlineExam & { attemptCount: number; liveCount: number; submittedCount: number; questionCount: number };
@@ -64,7 +65,11 @@ export default function ExamManagementView({ onBack, showToast }: { onBack: () =
     return () => window.clearInterval(refresh);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
-  const copy = async (slug: string) => { await navigator.clipboard.writeText(`${window.location.origin}/e/${slug}`); showToast('Student exam link copied.'); };
+  const copy = async (slug: string) => {
+    const liveUrl = getPublicExamUrl(slug);
+    await navigator.clipboard.writeText(liveUrl);
+    showToast(`Live student exam link copied: ${liveUrl}`);
+  };
 
   if (active) {
     const completed = detail?.attempts.filter(attempt => attempt.status === 'submitted' || attempt.status === 'auto_submitted') || [];
@@ -72,7 +77,7 @@ export default function ExamManagementView({ onBack, showToast }: { onBack: () =
       <button className="workspace-back" onClick={() => { setActive(null); setDetail(null); }}><ArrowLeft size={16}/> All exams</button>
       <div className="exam-console-heading">
         <div><span className="dashboard-eyebrow">LIVE EXAM CONTROL</span><h1>{active.title}</h1><p>{active.paper.class_std} · {active.paper.subject} · {active.questionCount} questions · refreshes every 10 seconds</p></div>
-        <div className="console-head-actions"><button className="workspace-back" onClick={() => void loadDetail(active)}><RefreshCw size={15}/> Refresh now</button><button className="exam-copy-link" onClick={() => void copy(active.slug)}><Copy size={15}/> Copy student link</button></div>
+        <div className="console-head-actions"><button className="workspace-back" onClick={() => void loadDetail(active)}><RefreshCw size={15}/> Refresh now</button><button className="exam-copy-link" onClick={() => void copy(active.slug)}><Copy size={15}/> Copy live student link</button><a className="exam-open-link" href={getPublicExamUrl(active.slug)} target="_blank" rel="noreferrer" title="Open live student test page"><ExternalLink size={15}/> Open live test</a></div>
       </div>
       {!detail ? <p className="console-loading">Loading exam control room…</p> : <>
         <section className="exam-live-stats">
