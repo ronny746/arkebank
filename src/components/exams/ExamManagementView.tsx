@@ -68,7 +68,7 @@ export default function ExamManagementView({ onBack, showToast }: { onBack: () =
   const copy = async (slug: string) => {
     const liveUrl = getPublicExamUrl(slug);
     await navigator.clipboard.writeText(liveUrl);
-    showToast(`Live student exam link copied: ${liveUrl}`);
+    showToast('Student exam link copied.');
   };
 
   if (active) {
@@ -77,7 +77,7 @@ export default function ExamManagementView({ onBack, showToast }: { onBack: () =
       <button className="workspace-back" onClick={() => { setActive(null); setDetail(null); }}><ArrowLeft size={16}/> All exams</button>
       <div className="exam-console-heading">
         <div><span className="dashboard-eyebrow">LIVE EXAM CONTROL</span><h1>{active.title}</h1><p>{active.paper.class_std} · {active.paper.subject} · {active.questionCount} questions · refreshes every 10 seconds</p></div>
-        <div className="console-head-actions"><button className="workspace-back" onClick={() => void loadDetail(active)}><RefreshCw size={15}/> Refresh now</button><button className="exam-copy-link" onClick={() => void copy(active.slug)}><Copy size={15}/> Copy live student link</button><a className="exam-open-link" href={getPublicExamUrl(active.slug)} target="_blank" rel="noreferrer" title="Open live student test page"><ExternalLink size={15}/> Open live test</a></div>
+        <div className="console-head-actions"><button className="workspace-back" onClick={() => void loadDetail(active)}><RefreshCw size={15}/> Refresh now</button><button className="exam-copy-link" onClick={() => void copy(active.slug)}><Copy size={15}/> Copy student link</button><a className="exam-open-link" href={getPublicExamUrl(active.slug)} target="_blank" rel="noreferrer" title="Open live student test page"><ExternalLink size={15}/> Open live test</a></div>
       </div>
       {!detail ? <p className="console-loading">Loading exam control room…</p> : <>
         <section className="exam-live-stats">
