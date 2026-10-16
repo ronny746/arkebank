@@ -11,7 +11,9 @@ import {
   Layers, 
   BookOpen, 
   Pencil,
-  HelpCircle
+  HelpCircle,
+  Plus,
+  Check
 } from 'lucide-react';
 import MathRenderer from './MathRenderer';
 
@@ -21,6 +23,8 @@ interface QuestionCardProps {
   onImageZoom: (url: string, title?: string) => void;
   onInspectTags?: (question: any) => void;
   onEditTags: (question: any) => void;
+  isInBasket?: boolean;
+  onToggleBasket?: (question: any) => void;
 }
 
 export default function QuestionCard({
@@ -29,6 +33,8 @@ export default function QuestionCard({
   onImageZoom,
   onInspectTags,
   onEditTags,
+  isInBasket = false,
+  onToggleBasket,
 }: QuestionCardProps) {
   const [showSolution, setShowSolution] = useState(false);
 
@@ -95,6 +101,17 @@ export default function QuestionCard({
 
         <div className="card-right-actions">
           <span className="badge badge-id">#{q.id}</span>
+          {onToggleBasket && (
+            <button
+              type="button"
+              onClick={() => onToggleBasket(q)}
+              className={`btn-card-action btn-basket-toggle ${isInBasket ? 'in-basket' : ''}`}
+              title={isInBasket ? 'Remove from Paper Draft' : 'Add to Paper Draft'}
+            >
+              {isInBasket ? <Check size={12} className="text-emerald" /> : <Plus size={12} />}
+              <span>{isInBasket ? '✓ Added' : '+ Add to Paper'}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onEditTags(q)}

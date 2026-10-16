@@ -14,8 +14,15 @@ import {
   Filter,
   X,
   XCircle,
-  Calendar
+  Calendar,
+  Sparkles,
+  FolderOpen,
+  Database
 } from 'lucide-react';
+import PaperGeneratorView from '@/components/paper/PaperGeneratorView';
+import SavedPapersView from '@/components/paper/SavedPapersView';
+import PaperBasketDrawer from '@/components/paper/PaperBasketDrawer';
+import { QuestionItem, SavedPaper } from '@/types/paper';
 import LoginForm from '@/components/LoginForm';
 import QuestionCard from '@/components/QuestionCard';
 import ImageModal from '@/components/ImageModal';
@@ -67,6 +74,66 @@ export default function Home() {
   const [inspectedQuestion, setInspectedQuestion] = useState<any | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Paper Generator Navigation & Basket State
+  const [activeNavTab, setActiveNavTab] = useState<'bank' | 'generator' | 'saved'>('bank');
+  const [basketQuestions, setBasketQuestions] = useState<QuestionItem[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('arke_paper_basket');
+      if (saved) {
+        setBasketQuestions(JSON.parse(saved));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const handleToggleBasket = (q: any) => {
+    const qId = q._id || q.id;
+    const exists = basketQuestions.some((item) => (item._id || item.id) === qId);
+    let updated: QuestionItem[] = [];
+    if (exists) {
+      updated = basketQuestions.filter((item) => (item._id || item.id) !== qId);
+      showToast(`Question #${q.id} removed from Paper Draft.`);
+    } else {
+      updated = [...basketQuestions, q];
+      showToast(`✓ Question #${q.id} added to Paper Draft (${updated.length} Qs).`);
+    }
+    setBasketQuestions(updated);
+    localStorage.setItem('arke_paper_basket', JSON.stringify(updated));
+  };
+
+  const handleRemoveFromBasket = (id: string | number) => {
+    const updated = basketQuestions.filter((item) => (item._id || item.id) !== id);
+    setBasketQuestions(updated);
+    localStorage.setItem('arke_paper_basket', JSON.stringify(updated));
+    showToast('Question removed from Paper Draft.');
+  };
+
+  const handleClearBasket = () => {
+    setBasketQuestions([]);
+    localStorage.removeItem('arke_paper_basket');
+    showToast('Paper Basket cleared.');
+  };
+
+  const handleLoadSavedPaper = (paper: SavedPaper) => {
+    localStorage.setItem(
+      'arke_active_paper_draft',
+      JSON.stringify({
+        questions: paper.questions || [],
+        examTitle: paper.title,
+        instituteName: paper.instituteName,
+        timeAllowed: paper.timeAllowed,
+        selectedClass: paper.class_std,
+        selectedSubject: paper.subject,
+        instructions: paper.instructions,
+      })
+    );
+    setActiveNavTab('generator');
+    showToast(`Loaded "${paper.title}" into Paper Studio!`);
+  };
 
   // Check saved session on mount
   useEffect(() => {
@@ -344,483 +411,553 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Mobile Top Bar with Filter Drawer Button */}
-      <div className="mobile-action-bar">
+      {/* Main Top Navigation Bar */}
+      <nav className="portal-main-nav hide-print">
         <button
           type="button"
-          onClick={() => setMobileFiltersOpen(true)}
-          className="btn-mobile-filter"
+          onClick={() => setActiveNavTab('bank')}
+          className={`portal-nav-tab ${activeNavTab === 'bank' ? 'active' : ''}`}
         >
-          <Filter size={14} className="text-emerald" />
-          <span>Filters</span>
-          {activeFiltersCount > 0 && (
-            <span className="mobile-filter-badge">{activeFiltersCount}</span>
+          <Database size={15} />
+          <span>Question Bank ({totalDbCount.toLocaleString()})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveNavTab('generator')}
+          className={`portal-nav-tab ${activeNavTab === 'generator' ? 'active' : ''}`}
+        >
+          <Sparkles size={15} className="text-emerald" />
+          <span>⚡ Paper Generator</span>
+          {basketQuestions.length > 0 && (
+            <span className="nav-tab-badge">{basketQuestions.length}</span>
           )}
         </button>
-        <div className="mobile-total-count">
-          <span>{totalQuestions.toLocaleString()} Questions</span>
-        </div>
-      </div>
 
-      {/* Main Dashboard Two-Column Layout */}
-      <div className="portal-dashboard">
-        {/* Left Sidebar: ALL Filters Cleanly Organized */}
-        <aside className={`portal-sidebar ${mobileFiltersOpen ? "mobile-open" : ""}`}>
-          <div className="sidebar-header">
-            <div className="sidebar-title-row">
-              <Filter size={15} className="text-emerald" />
-              <span className="sidebar-title">All Filters & Taxonomy</span>
-            </div>
-            <div className="sidebar-header-actions">
+        <button
+          type="button"
+          onClick={() => setActiveNavTab('saved')}
+          className={`portal-nav-tab ${activeNavTab === 'saved' ? 'active' : ''}`}
+        >
+          <FolderOpen size={15} />
+          <span>Saved Papers Library</span>
+        </button>
+      </nav>
+
+      {/* Mobile Top Bar with Filter Drawer Button */}
+      {activeNavTab === 'bank' && (
+        <>
+          <div className="mobile-action-bar">
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className="btn-mobile-filter"
+            >
+              <Filter size={14} className="text-emerald" />
+              <span>Filters</span>
               {activeFiltersCount > 0 && (
-                <button onClick={handleResetFilters} className="btn-sidebar-reset">
-                  <RotateCcw size={11} />
-                  <span>Reset ({activeFiltersCount})</span>
-                </button>
+                <span className="mobile-filter-badge">{activeFiltersCount}</span>
               )}
-              <button
-                type="button"
-                onClick={() => setMobileFiltersOpen(false)}
-                className="btn-close-mobile-filters"
-                title="Close filters"
-              >
-                <X size={16} />
-              </button>
+            </button>
+            <div className="mobile-total-count">
+              <span>{totalQuestions.toLocaleString()} Questions</span>
             </div>
           </div>
 
-          <div className="sidebar-content">
-            {filtersLoading ? (
-              <SidebarFiltersSkeleton />
-            ) : (
-              <>
-            {/* 1. Target Class / Stream */}
-            <div className="filter-group">
-              <label className="filter-group-label">Class / Examination Target</label>
-              <div className="pill-grid">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedClass('all');
-                    setSelectedTopic('all');
-                    setSelectedSubTopic('all');
-                    setPage(1);
-                  }}
-                  className={`pill-option ${selectedClass === 'all' ? 'active' : ''}`}
-                >
-                  All
-                </button>
-                {classesList.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      setSelectedClass(c);
-                      setSelectedTopic('all');
-                      setSelectedSubTopic('all');
-                      setPage(1);
-                    }}
-                    className={`pill-option ${selectedClass === c ? 'active' : ''}`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 2. Subject Filter */}
-            <div className="filter-group">
-              <label className="filter-group-label">Subject</label>
-              <div className="pill-grid">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSubject('all');
-                    setSelectedTopic('all');
-                    setSelectedSubTopic('all');
-                    setPage(1);
-                  }}
-                  className={`pill-option ${selectedSubject === 'all' ? 'active' : ''}`}
-                >
-                  All
-                </button>
-                {subjectsList.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSubject(s);
-                      setSelectedTopic('all');
-                      setSelectedSubTopic('all');
-                      setPage(1);
-                    }}
-                    className={`pill-option ${selectedSubject === s ? 'active' : ''}`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 3. Difficulty Level Filter */}
-            <div className="filter-group">
-              <label className="filter-group-label">Difficulty Level</label>
-              <div className="pill-grid">
-                {difficultiesList.map((d) => (
-                  <button
-                    key={d.value}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDifficulty(d.value);
-                      setPage(1);
-                    }}
-                    className={`pill-option pill-diff diff-${d.value} ${selectedDifficulty === d.value ? 'active' : ''}`}
-                  >
-                    {d.value === 'all' ? 'All' : `Tier ${d.value} (${d.label.split('-')[1]?.trim() || d.label})`}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 4. Exam Year (PYQ) Filter */}
-            <div className="filter-group">
-              <label className="filter-group-label">
-                <span>Exam Year (PYQ)</span>
-                {yearsList.length > 0 && (
-                  <span className="filter-count-tag">{yearsList.length} Years</span>
-                )}
-              </label>
-              <select
-                value={selectedYear}
-                onChange={(e) => {
-                  setSelectedYear(e.target.value);
-                  setPage(1);
-                }}
-                className="portal-select"
-              >
-                <option value="all">All Exam Years</option>
-                {yearsList.map((yr) => (
-                  <option key={yr} value={String(yr)}>Year {yr}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 5. Chapter / Topic Filter */}
-            <div className="filter-group">
-              <label className="filter-group-label">
-                <span>Chapter / Topic</span>
-                {topicsList.length > 0 && (
-                  <span className="filter-count-tag">{topicsList.length} Chapters</span>
-                )}
-              </label>
-              <select
-                value={selectedTopic}
-                onChange={(e) => {
-                  setSelectedTopic(e.target.value);
-                  setSelectedSubTopic('all');
-                  setPage(1);
-                }}
-                className="portal-select"
-              >
-                <option value="all">
-                  {topicsList.length ? `All Chapters (${topicsList.length})` : 'All Chapters'}
-                </option>
-                {topicsList.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 6. Sub-Topic / Concept Filter */}
-            <div className="filter-group">
-              <label className="filter-group-label">
-                <span>Sub-Topic / Concept</span>
-                {subTopicsList.length > 0 && (
-                  <span className="filter-count-tag">{subTopicsList.length}</span>
-                )}
-              </label>
-              <select
-                value={selectedSubTopic}
-                onChange={(e) => {
-                  setSelectedSubTopic(e.target.value);
-                  setPage(1);
-                }}
-                disabled={subTopicsList.length === 0}
-                className="portal-select"
-              >
-                <option value="all">
-                  {subTopicsList.length ? `All Concepts (${subTopicsList.length})` : 'Select a Chapter first'}
-                </option>
-                {subTopicsList.map((st) => (
-                  <option key={st} value={st}>{st}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 7. Language Filter */}
-            <div className="filter-group">
-              <label className="filter-group-label">Language</label>
-              <div className="segmented-switch">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedLang('all');
-                    setPage(1);
-                  }}
-                  className={`segment-btn ${selectedLang === 'all' ? 'active' : ''}`}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedLang('en');
-                    setPage(1);
-                  }}
-                  className={`segment-btn ${selectedLang === 'en' ? 'active' : ''}`}
-                >
-                  English
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedLang('hi');
-                    setPage(1);
-                  }}
-                  className={`segment-btn ${selectedLang === 'hi' ? 'active' : ''}`}
-                >
-                  Hindi
-                </button>
-              </div>
-            </div>
-
-            {/* 8. Diagram Filter Toggle */}
-            <div className="filter-toggle-row">
-              <div className="toggle-info">
-                <ImageIcon size={15} className="text-navy" />
-                <span className="toggle-label">Diagrams Only</span>
-              </div>
-              <input
-                type="checkbox"
-                id="has-diagram-toggle"
-                checked={hasImageOnly}
-                onChange={(e) => {
-                  setHasImageOnly(e.target.checked);
-                  setPage(1);
-                }}
-                className="portal-toggle"
-              />
-            </div>
-                {/* Sticky Mobile Apply Button */}
-                <div className="mobile-filter-apply-bar">
+          {/* Main Dashboard Two-Column Layout */}
+          <div className="portal-dashboard">
+            {/* Left Sidebar: ALL Filters Cleanly Organized */}
+            <aside className={`portal-sidebar ${mobileFiltersOpen ? "mobile-open" : ""}`}>
+              <div className="sidebar-header">
+                <div className="sidebar-title-row">
+                  <Filter size={15} className="text-emerald" />
+                  <span className="sidebar-title">All Filters & Taxonomy</span>
+                </div>
+                <div className="sidebar-header-actions">
+                  {activeFiltersCount > 0 && (
+                    <button onClick={handleResetFilters} className="btn-sidebar-reset">
+                      <RotateCcw size={11} />
+                      <span>Reset ({activeFiltersCount})</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setMobileFiltersOpen(false)}
-                    className="btn-apply-filters"
+                    className="btn-close-mobile-filters"
+                    title="Close filters"
                   >
-                    Show {totalQuestions.toLocaleString()} Questions
+                    <X size={16} />
                   </button>
                 </div>
-              </>
+              </div>
+
+              <div className="sidebar-content">
+                {filtersLoading ? (
+                  <SidebarFiltersSkeleton />
+                ) : (
+                  <>
+                {/* 1. Target Class / Stream */}
+                <div className="filter-group">
+                  <label className="filter-group-label">Class / Examination Target</label>
+                  <div className="pill-grid">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedClass('all');
+                        setSelectedSubject('all');
+                        setSelectedTopic('all');
+                        setSelectedSubTopic('all');
+                        setPage(1);
+                      }}
+                      className={`pill-btn ${selectedClass === 'all' ? 'active' : ''}`}
+                    >
+                      All Classes
+                    </button>
+                    {classesList.map((cls) => (
+                      <button
+                        key={cls}
+                        type="button"
+                        onClick={() => {
+                          setSelectedClass(cls);
+                          setSelectedSubject('all');
+                          setSelectedTopic('all');
+                          setSelectedSubTopic('all');
+                          setPage(1);
+                        }}
+                        className={`pill-btn ${selectedClass === cls ? 'active' : ''}`}
+                      >
+                        {cls}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Subject Selection */}
+                <div className="filter-group">
+                  <label className="filter-group-label">Subject</label>
+                  <div className="pill-grid">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSubject('all');
+                        setSelectedTopic('all');
+                        setSelectedSubTopic('all');
+                        setPage(1);
+                      }}
+                      className={`pill-btn ${selectedSubject === 'all' ? 'active' : ''}`}
+                    >
+                      All Subjects
+                    </button>
+                    {subjectsList.map((sub) => (
+                      <button
+                        key={sub}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSubject(sub);
+                          setSelectedTopic('all');
+                          setSelectedSubTopic('all');
+                          setPage(1);
+                        }}
+                        className={`pill-btn ${selectedSubject === sub ? 'active' : ''}`}
+                      >
+                        {sub}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Difficulty Level */}
+                <div className="filter-group">
+                  <label className="filter-group-label">Difficulty Tier</label>
+                  <div className="pill-grid">
+                    {difficultiesList.map((diff) => (
+                      <button
+                        key={diff.value}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDifficulty(diff.value);
+                          setPage(1);
+                        }}
+                        className={`pill-btn ${selectedDifficulty === diff.value ? 'active' : ''}`}
+                      >
+                        {diff.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Exam Year (PYQ) Filter */}
+                <div className="filter-group">
+                  <label className="filter-group-label">
+                    <span>Exam Year (PYQ)</span>
+                    {yearsList.length > 0 && (
+                      <span className="filter-count-tag">{yearsList.length} Years</span>
+                    )}
+                  </label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => {
+                      setSelectedYear(e.target.value);
+                      setPage(1);
+                    }}
+                    className="portal-select"
+                  >
+                    <option value="all">All Exam Years</option>
+                    {yearsList.map((yr) => (
+                      <option key={yr} value={String(yr)}>Year {yr}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 5. Chapter / Topic Filter */}
+                <div className="filter-group">
+                  <label className="filter-group-label">
+                    <span>Chapter / Topic</span>
+                    {topicsList.length > 0 && (
+                      <span className="filter-count-tag">{topicsList.length} Chapters</span>
+                    )}
+                  </label>
+                  <select
+                    value={selectedTopic}
+                    onChange={(e) => {
+                      setSelectedTopic(e.target.value);
+                      setSelectedSubTopic('all');
+                      setPage(1);
+                    }}
+                    className="portal-select"
+                  >
+                    <option value="all">
+                      {topicsList.length ? `All Chapters (${topicsList.length})` : 'All Chapters'}
+                    </option>
+                    {topicsList.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 6. Sub-Topic / Concept Filter */}
+                <div className="filter-group">
+                  <label className="filter-group-label">
+                    <span>Sub-Topic / Concept</span>
+                    {subTopicsList.length > 0 && (
+                      <span className="filter-count-tag">{subTopicsList.length}</span>
+                    )}
+                  </label>
+                  <select
+                    value={selectedSubTopic}
+                    onChange={(e) => {
+                      setSelectedSubTopic(e.target.value);
+                      setPage(1);
+                    }}
+                    disabled={subTopicsList.length === 0}
+                    className="portal-select"
+                  >
+                    <option value="all">All Sub-Topics</option>
+                    {subTopicsList.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 7. Language Filter */}
+                <div className="filter-group">
+                  <label className="filter-group-label">Language</label>
+                  <div className="segmented-control">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLang('all');
+                        setPage(1);
+                      }}
+                      className={`segment-btn ${selectedLang === 'all' ? 'active' : ''}`}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLang('en');
+                        setPage(1);
+                      }}
+                      className={`segment-btn ${selectedLang === 'en' ? 'active' : ''}`}
+                    >
+                      English
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLang('hi');
+                        setPage(1);
+                      }}
+                      className={`segment-btn ${selectedLang === 'hi' ? 'active' : ''}`}
+                    >
+                      Hindi
+                    </button>
+                  </div>
+                </div>
+
+                {/* 8. Diagram Filter Toggle */}
+                <div className="filter-toggle-row">
+                  <div className="toggle-info">
+                    <ImageIcon size={15} className="text-navy" />
+                    <span className="toggle-label">Diagrams Only</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    id="has-diagram-toggle"
+                    checked={hasImageOnly}
+                    onChange={(e) => {
+                      setHasImageOnly(e.target.checked);
+                      setPage(1);
+                    }}
+                    className="portal-toggle"
+                  />
+                </div>
+                    {/* Sticky Mobile Apply Button */}
+                    <div className="mobile-filter-apply-bar">
+                      <button
+                        type="button"
+                        onClick={() => setMobileFiltersOpen(false)}
+                        className="btn-apply-filters"
+                      >
+                        Show {totalQuestions.toLocaleString()} Questions
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </aside>
+
+            {/* Mobile Sidebar Backdrop */}
+            {mobileFiltersOpen && (
+              <div
+                className="mobile-backdrop"
+                onClick={() => setMobileFiltersOpen(false)}
+              />
             )}
-          </div>
-        </aside>
 
-        {/* Mobile Sidebar Backdrop */}
-        {mobileFiltersOpen && (
-          <div
-            className="mobile-backdrop"
-            onClick={() => setMobileFiltersOpen(false)}
+            {/* Right Main Content: Feed Panel */}
+            <main className="portal-main">
+              {/* Active Filter Chips & Bar */}
+              <div className="feed-toolbar">
+                <div className="active-chips-row">
+                  <span className="chips-title">Active:</span>
+                  {selectedClass !== 'all' && (
+                    <span className="filter-chip">
+                      <span>Class: {selectedClass}</span>
+                      <button onClick={() => setSelectedClass('all')}><X size={11} /></button>
+                    </span>
+                  )}
+                  {selectedSubject !== 'all' && (
+                    <span className="filter-chip">
+                      <span>Subject: {selectedSubject}</span>
+                      <button onClick={() => setSelectedSubject('all')}><X size={11} /></button>
+                    </span>
+                  )}
+                  {selectedDifficulty !== 'all' && (
+                    <span className="filter-chip">
+                      <span>Tier: {selectedDifficulty}</span>
+                      <button onClick={() => setSelectedDifficulty('all')}><X size={11} /></button>
+                    </span>
+                  )}
+                  {selectedYear !== 'all' && (
+                    <span className="filter-chip">
+                      <span>Year: {selectedYear}</span>
+                      <button onClick={() => setSelectedYear('all')}><X size={11} /></button>
+                    </span>
+                  )}
+                  {selectedTopic !== 'all' && (
+                    <span className="filter-chip">
+                      <span>Topic: {selectedTopic}</span>
+                      <button onClick={() => setSelectedTopic('all')}><X size={11} /></button>
+                    </span>
+                  )}
+                  {selectedLang !== 'all' && (
+                    <span className="filter-chip">
+                      <span>Lang: {selectedLang.toUpperCase()}</span>
+                      <button onClick={() => setSelectedLang('all')}><X size={11} /></button>
+                    </span>
+                  )}
+                  {hasImageOnly && (
+                    <span className="filter-chip">
+                      <span>Diagrams Only</span>
+                      <button onClick={() => setHasImageOnly(false)}><X size={11} /></button>
+                    </span>
+                  )}
+                  {searchQuery && (
+                    <span className="filter-chip search-chip">
+                      <span>Search: &ldquo;{searchQuery}&rdquo;</span>
+                      <button onClick={() => { setSearchQuery(''); setSearchInput(''); }}><X size={11} /></button>
+                    </span>
+                  )}
+                  {activeFiltersCount === 0 && (
+                    <span className="text-muted text-sm">All questions in repository</span>
+                  )}
+                </div>
+
+                {/* Results count & Page navigator */}
+                <div className="toolbar-right">
+                  <div className="results-count-badge">
+                    <span>Showing </span>
+                    <b>{questions.length > 0 ? (page - 1) * limit + 1 : 0}</b>
+                    <span>–</span>
+                    <b>{Math.min(page * limit, totalQuestions)}</b>
+                    <span> of </span>
+                    <b className="text-navy">{totalQuestions.toLocaleString()}</b>
+                  </div>
+
+                  <div className="per-page-select-wrapper">
+                    <select
+                      value={limit}
+                      onChange={(e) => {
+                        setLimit(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className="per-page-select"
+                    >
+                      <option value={15}>15 / page</option>
+                      <option value={30}>30 / page</option>
+                      <option value={50}>50 / page</option>
+                    </select>
+                  </div>
+
+                  <div className="toolbar-page-nav">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1 || loading}
+                      className="btn-toolbar-nav"
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+                    <span className="toolbar-page-indicator">{page} / {totalPages || 1}</span>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages || loading}
+                      className="btn-toolbar-nav"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="alert-box alert-error">
+                  <XCircle size={16} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Question Feed */}
+              {loading ? (
+                <div className="questions-feed">
+                  {[1, 2, 3, 4].map((n) => (
+                    <QuestionCardSkeleton key={n} />
+                  ))}
+                </div>
+              ) : questions.length === 0 ? (
+                <div className="empty-state-card">
+                  <HelpCircle size={44} className="text-muted" />
+                  <h3>No questions found matching your criteria</h3>
+                  <p>Try clearing your chapter, keyword, or year filters to broaden results.</p>
+                  <button onClick={handleResetFilters} className="btn-primary">
+                    <RotateCcw size={15} />
+                    <span>Reset All Filters</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="questions-feed">
+                  {questions.map((q, idx) => (
+                    <QuestionCard
+                      key={q._id || q.id}
+                      question={q}
+                      index={(page - 1) * limit + idx + 1}
+                      onImageZoom={(url, title) => setZoomImage({ url, title })}
+                      onInspectTags={(questionData) => setInspectedQuestion(questionData)}
+                      onEditTags={(questionData) => setEditingQuestion(questionData)}
+                      isInBasket={basketQuestions.some((item) => (item._id || item.id) === (q._id || q.id))}
+                      onToggleBasket={handleToggleBasket}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Bottom Pagination */}
+              {totalPages > 1 && (
+                <div className="pagination-bottom">
+                  <button
+                    onClick={() => setPage(1)}
+                    disabled={page <= 1 || loading}
+                    className="btn-page-text"
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1 || loading}
+                    className="btn-page-text"
+                  >
+                    <ChevronLeft size={15} />
+                    <span>Previous</span>
+                  </button>
+
+                  <span className="page-bottom-info">
+                    Page <b>{page}</b> of <b>{totalPages}</b>
+                  </span>
+
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages || loading}
+                    className="btn-page-text"
+                  >
+                    <span>Next</span>
+                    <ChevronRight size={15} />
+                  </button>
+                  <button
+                    onClick={() => setPage(totalPages)}
+                    disabled={page >= totalPages || loading}
+                    className="btn-page-text"
+                  >
+                    Last ({totalPages})
+                  </button>
+                </div>
+              )}
+            </main>
+          </div>
+
+          {/* Floating Question Paper Basket Drawer */}
+          <PaperBasketDrawer
+            basketQuestions={basketQuestions}
+            onRemoveQuestion={handleRemoveFromBasket}
+            onClearBasket={handleClearBasket}
+            onOpenGenerator={() => setActiveNavTab('generator')}
           />
-        )}
+        </>
+      )}
 
-        {/* Right Main Content: Feed Panel */}
-        <main className="portal-main">
-          {/* Active Filter Chips & Bar */}
-          <div className="feed-toolbar">
-            <div className="active-chips-row">
-              <span className="chips-title">Active:</span>
-              {selectedClass !== 'all' && (
-                <span className="filter-chip">
-                  <span>Class: {selectedClass}</span>
-                  <button onClick={() => setSelectedClass('all')}><X size={11} /></button>
-                </span>
-              )}
-              {selectedSubject !== 'all' && (
-                <span className="filter-chip">
-                  <span>Subject: {selectedSubject}</span>
-                  <button onClick={() => setSelectedSubject('all')}><X size={11} /></button>
-                </span>
-              )}
-              {selectedDifficulty !== 'all' && (
-                <span className="filter-chip">
-                  <span>Tier: {selectedDifficulty}</span>
-                  <button onClick={() => setSelectedDifficulty('all')}><X size={11} /></button>
-                </span>
-              )}
-              {selectedYear !== 'all' && (
-                <span className="filter-chip">
-                  <span>Year: {selectedYear}</span>
-                  <button onClick={() => setSelectedYear('all')}><X size={11} /></button>
-                </span>
-              )}
-              {selectedTopic !== 'all' && (
-                <span className="filter-chip">
-                  <span>Topic: {selectedTopic}</span>
-                  <button onClick={() => setSelectedTopic('all')}><X size={11} /></button>
-                </span>
-              )}
-              {selectedLang !== 'all' && (
-                <span className="filter-chip">
-                  <span>Lang: {selectedLang.toUpperCase()}</span>
-                  <button onClick={() => setSelectedLang('all')}><X size={11} /></button>
-                </span>
-              )}
-              {hasImageOnly && (
-                <span className="filter-chip">
-                  <span>Diagrams Only</span>
-                  <button onClick={() => setHasImageOnly(false)}><X size={11} /></button>
-                </span>
-              )}
-              {searchQuery && (
-                <span className="filter-chip search-chip">
-                  <span>Search: &ldquo;{searchQuery}&rdquo;</span>
-                  <button onClick={() => { setSearchQuery(''); setSearchInput(''); }}><X size={11} /></button>
-                </span>
-              )}
-              {activeFiltersCount === 0 && (
-                <span className="text-muted text-sm">All questions in repository</span>
-              )}
-            </div>
+      {/* PAPER GENERATOR TAB */}
+      {activeNavTab === 'generator' && (
+        <PaperGeneratorView
+          classesList={classesList}
+          subjectsList={subjectsList}
+          topicsList={topicsList}
+          basketQuestions={basketQuestions}
+          onClearBasket={handleClearBasket}
+          onImageZoom={(url, title) => setZoomImage({ url, title })}
+          showToast={showToast}
+          onNavigateToBank={() => setActiveNavTab('bank')}
+        />
+      )}
 
-            {/* Results count & Page navigator */}
-            <div className="toolbar-right">
-              <div className="results-count-badge">
-                <span>Showing </span>
-                <b>{questions.length > 0 ? (page - 1) * limit + 1 : 0}</b>
-                <span>–</span>
-                <b>{Math.min(page * limit, totalQuestions)}</b>
-                <span> of </span>
-                <b className="text-navy">{totalQuestions.toLocaleString()}</b>
-              </div>
-
-              <div className="per-page-select-wrapper">
-                <select
-                  value={limit}
-                  onChange={(e) => {
-                    setLimit(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  className="per-page-select"
-                >
-                  <option value={15}>15 / page</option>
-                  <option value={30}>30 / page</option>
-                  <option value={50}>50 / page</option>
-                </select>
-              </div>
-
-              <div className="toolbar-page-nav">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1 || loading}
-                  className="btn-toolbar-nav"
-                >
-                  <ChevronLeft size={15} />
-                </button>
-                <span className="toolbar-page-indicator">{page} / {totalPages || 1}</span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages || loading}
-                  className="btn-toolbar-nav"
-                >
-                  <ChevronRight size={15} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="alert-box alert-error">
-              <XCircle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Question Feed */}
-          {loading ? (
-            <div className="questions-feed">
-              {[1, 2, 3, 4].map((n) => (
-                <QuestionCardSkeleton key={n} />
-              ))}
-            </div>
-          ) : questions.length === 0 ? (
-            <div className="empty-state-card">
-              <HelpCircle size={44} className="text-muted" />
-              <h3>No questions found matching your criteria</h3>
-              <p>Try clearing your chapter, keyword, or year filters to broaden results.</p>
-              <button onClick={handleResetFilters} className="btn-primary">
-                <RotateCcw size={15} />
-                <span>Reset All Filters</span>
-              </button>
-            </div>
-          ) : (
-            <div className="questions-feed">
-              {questions.map((q, idx) => (
-                <QuestionCard
-                  key={q._id || q.id}
-                  question={q}
-                  index={(page - 1) * limit + idx + 1}
-                  onImageZoom={(url, title) => setZoomImage({ url, title })}
-                  onInspectTags={(questionData) => setInspectedQuestion(questionData)}
-                  onEditTags={(questionData) => setEditingQuestion(questionData)}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Bottom Pagination */}
-          {totalPages > 1 && (
-            <div className="pagination-bottom">
-              <button
-                onClick={() => setPage(1)}
-                disabled={page <= 1 || loading}
-                className="btn-page-text"
-              >
-                First
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1 || loading}
-                className="btn-page-text"
-              >
-                <ChevronLeft size={15} />
-                <span>Previous</span>
-              </button>
-
-              <span className="page-bottom-info">
-                Page <b>{page}</b> of <b>{totalPages}</b>
-              </span>
-
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages || loading}
-                className="btn-page-text"
-              >
-                <span>Next</span>
-                <ChevronRight size={15} />
-              </button>
-              <button
-                onClick={() => setPage(totalPages)}
-                disabled={page >= totalPages || loading}
-                className="btn-page-text"
-              >
-                Last ({totalPages})
-              </button>
-            </div>
-          )}
-        </main>
-      </div>
+      {/* SAVED PAPERS TAB */}
+      {activeNavTab === 'saved' && (
+        <SavedPapersView
+          onLoadPaper={handleLoadSavedPaper}
+          onNavigateToGenerator={() => setActiveNavTab('generator')}
+          showToast={showToast}
+        />
+      )}
 
       {/* High-Resolution Diagram Zoom Modal */}
       <ImageModal
@@ -843,8 +980,6 @@ export default function Home() {
         availableClasses={classesList}
         availableSubjects={subjectsList}
       />
-
-
     </div>
   );
 }
