@@ -1,19 +1,17 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SavedPaper } from '@/types/paper';
 import { 
   FolderOpen, 
-  Printer, 
   Trash2, 
   FileText, 
   Calendar, 
-  Clock, 
-  Award, 
-  Layers, 
   RotateCw,
   ExternalLink,
-  Plus
+  Plus,
+  Search,
+  X
 } from 'lucide-react';
 import ExamCreatorModal from '@/components/exams/ExamCreatorModal';
 
@@ -30,19 +28,20 @@ export default function SavedPapersView({
 }: SavedPapersViewProps) {
   const [papers, setPapers] = useState<SavedPaper[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [paperForExam, setPaperForExam] = useState<SavedPaper | null>(null);
 
   const fetchSavedPapers = async () => {
     setLoading(true);
     let loadedList: SavedPaper[] = [];
 
-    // 1. Try fetching from MongoDB API
+    // 1. Try fetching from MongoDB API (Redis-backed)
     try {
       const token = localStorage.getItem('arke_token');
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('/api/paper/saved', {
+      const res = await fetch('/api/paper/saved?limit=200', {
         headers,
         credentials: 'include',
       });
@@ -78,6 +77,50 @@ export default function SavedPapersView({
   useEffect(() => {
     fetchSavedPapers();
   }, []);
+
+  const filteredPapers = useMemo(() => {
+    if (!searchQuery.trim()) return papers;
+    const q = searchQuery.toLowerCase();
+    return papers.filter((p) => {
+      return (
+        p.title?.toLowerCase().includes(q) ||
+        p.subject?.toLowerCase().includes(q) ||
+        p.class_std?.toLowerCase().includes(q) ||
+        p.instituteName?.toLowerCase().includes(q)
+      );
+    });
+  }, [papers, searchQuery]);
+
+  const handleOpenPaper = async (paper: SavedPaper) => {
+    // If questions array is already loaded, open immediately
+    if (paper.questions && paper.questions.length > 0) {
+      onLoadPaper(paper);
+      return;
+    }
+
+    // Otherwise fetch the full document instantly from Redis/MongoDB cache
+    try {
+      const token = localStorage.getItem('arke_token');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/paper/saved/${paper.id}`, {
+        headers,
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.paper) {
+          onLoadPaper(data.paper);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load full paper', e);
+    }
+
+    onLoadPaper(paper);
+  };
 
   const handleDelete = async (paperId: string) => {
     if (!confirm('Are you sure you want to delete this saved paper?')) return;
@@ -120,7 +163,7 @@ export default function SavedPapersView({
             <span>Saved Question Papers Library</span>
           </h2>
           <p className="saved-desc">
-            All previously generated and customized question papers stored in your institutional workspace.
+            Ultra-fast indexed library. Search and manage any number of question papers with zero lag.
           </p>
         </div>
 
@@ -145,31 +188,70 @@ export default function SavedPapersView({
         </div>
       </div>
 
+      {/* Fast Search & Stats Filter Row */}
+      <div className="saved-papers-search-bar">
+        <div className="search-input-wrap">
+          <Search size={16} className="search-icon" />
+          <input
+            type="text"
+            placeholder="Search papers by title, subject, class, or institute..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="saved-search-input"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="btn-clear-search"
+              title="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <div className="saved-count-pill">
+          Showing {filteredPapers.length} of {papers.length} Papers
+        </div>
+      </div>
+
       {/* Grid of Saved Papers */}
       {loading ? (
         <div className="saved-loading-state">
           <div className="spinner"></div>
-          <span>Loading your question papers...</span>
+          <span>Loading question papers from high-speed cache...</span>
         </div>
-      ) : papers.length === 0 ? (
+      ) : filteredPapers.length === 0 ? (
         <div className="saved-empty-state">
           <FileText size={48} className="empty-icon text-muted" />
-          <h3>No Saved Question Papers Yet</h3>
+          <h3>{searchQuery ? 'No Matching Papers Found' : 'No Saved Question Papers Yet'}</h3>
           <p>
-            You haven&apos;t saved any question papers yet. Go to the Paper Generator to create your first examination paper!
+            {searchQuery
+              ? `No saved papers matched your search "${searchQuery}". Try another keyword or clear the search.`
+              : "You haven't saved any question papers yet. Go to the Paper Generator to create your first examination paper!"}
           </p>
-          <button
-            type="button"
-            onClick={onNavigateToGenerator}
-            className="btn-empty-create"
-          >
-            <Plus size={15} />
-            <span>Generate Examination Paper</span>
-          </button>
+          {searchQuery ? (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="btn-empty-create"
+            >
+              <span>Clear Search Filter</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onNavigateToGenerator}
+              className="btn-empty-create"
+            >
+              <Plus size={15} />
+              <span>Generate Examination Paper</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="saved-papers-grid">
-          {papers.map((paper) => {
+          {filteredPapers.map((paper) => {
             const dateStr = paper.createdAt
               ? new Date(paper.createdAt).toLocaleDateString('en-IN', {
                   day: 'numeric',
@@ -211,7 +293,7 @@ export default function SavedPapersView({
                 <div className="paper-card-actions">
                   <button
                     type="button"
-                    onClick={() => onLoadPaper(paper)}
+                    onClick={() => handleOpenPaper(paper)}
                     className="btn-open-paper"
                   >
                     <ExternalLink size={13} />

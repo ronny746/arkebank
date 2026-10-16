@@ -1,4 +1,4 @@
-import { delCache } from '@/lib/cache';
+import { delCache, delCachePattern } from '@/lib/cache';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
@@ -39,7 +39,9 @@ export async function POST(req: Request) {
     const { db } = await connectToDatabase();
     const papersCol = db.collection('papers');
 
-    await delCache('papers:list:v1');
+    await delCachePattern('papers:*');
+    await delCache(`paper:id:${paperId}`);
+
     await papersCol.updateOne(
       { id: paperId },
       { $set: paperDoc },
