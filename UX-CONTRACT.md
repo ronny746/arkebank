@@ -17,7 +17,9 @@ Faculty navigation is route-backed through the portal shell, with a collapsible 
 ## Paper Studio flow
 
 1. **Blueprint:** teacher selects class, subject(s), title and institute.
-2. **Pick questions:** teacher chooses chapters, previews real question records, and adds individual, visible batch, or generated chapter questions without overwriting the draft.
-3. **Balance & build:** teacher selects count, duration, language, marks, filters and difficulty before generating the editable paper.
+2. **Pick questions:** teacher chooses chapters, previews real question records, and adds individual, visible batch, or generated chapter questions without overwriting the draft. Chapters and subjects with no matching question records are not offered.
+3. **Balance & build:** teacher selects count, duration, language, marks, filters and difficulty before generating the editable paper. If the teacher has manually picked questions, the target is locked to that exact selection; the system never pads it with unseen questions.
 
 The builder preserves its draft while moving between steps. "Open paper" enters the editing workspace only when at least one question is selected.
+
+Paper preview checks saved papers for repeated question IDs and labels a prior use with the originating paper title. The teacher can use the existing Replace Question or Remove action on the same card before saving.

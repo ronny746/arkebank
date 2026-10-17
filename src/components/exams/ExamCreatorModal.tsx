@@ -81,7 +81,7 @@ export default function ExamCreatorModal({
           <div className="exam-link-ready">
             <Link2 size={24} />
             <h3>Student link is ready</h3>
-            <p>Students open this link to register and start the timed secure test.</p>
+            <p>Stored in the shared exam database. Students can use this link to register and start the timed secure test.</p>
             <div>
               <input readOnly value={link} onClick={(e) => (e.target as HTMLInputElement).select()} />
               <button type="button" onClick={copy}>

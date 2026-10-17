@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import Image from 'next/image';
 import { QuestionItem, PaperMetadata } from '@/types/paper';
 import MathRenderer from '../MathRenderer';
@@ -25,10 +25,19 @@ export default function PaperPrintableDocument({
   optionsLayout = '2-col',
 }: PaperPrintableDocumentProps) {
   const isSolutions = mode === 'solutions';
+  const printableQuestions = useMemo(() => {
+    const seen = new Set<string>();
+    return questions.filter((question) => {
+      const identity = String(question._id || question.id);
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    });
+  }, [questions]);
 
   // Compute stats
-  const totalQuestions = questions.length;
-  const totalMarks = questions.reduce((sum, q) => sum + (Number(q.marks) || 4), 0);
+  const totalQuestions = printableQuestions.length;
+  const totalMarks = printableQuestions.reduce((sum, q) => sum + (Number(q.marks) || 4), 0);
 
   // Helper for option key display: A/B/C/D or 1/2/3/4
   const formatOptionKey = (key: string): string => {
@@ -137,11 +146,11 @@ export default function PaperPrintableDocument({
         <div className="quick-answer-matrix">
           <div className="matrix-title">QUICK ANSWER KEY GRID</div>
           <div className="matrix-grid">
-            {questions.map((q, idx) => {
+            {printableQuestions.map((q, idx) => {
               const rawOpt = q.correct_option || q.correct_answer || '-';
               const formattedOpt = formatOptionKey(rawOpt);
               return (
-                <div key={q._id || idx} className="matrix-cell">
+                <div key={`${q._id || q.id}-${idx}`} className="matrix-cell">
                   <span className="cell-num">Q{idx + 1}</span>
                   <span className="cell-opt">({formattedOpt})</span>
                 </div>
@@ -153,13 +162,13 @@ export default function PaperPrintableDocument({
 
       {/* Questions Flow (Single Column or Dual Column Layout) */}
       <div className={`paper-questions-flow cols-${columnsMode}`}>
-        {questions.map((q, idx) => {
+        {printableQuestions.map((q, idx) => {
           const qNumber = idx + 1;
           const qMarks = Number(q.marks) || 4;
           const qNeg = Number(q.negative_marks) || 1;
 
           return (
-            <div key={q._id || q.id || idx} className="paper-question-block">
+            <div key={`${q._id || q.id}-${idx}`} className="paper-question-block">
               {/* Question Header Line */}
               <div className="paper-q-header">
                 <div className="paper-q-num-box">

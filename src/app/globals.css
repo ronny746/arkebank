@@ -5329,6 +5329,14 @@ body {
 .chapter-list-hint { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--card-border); color: var(--text-muted); font-size: .68rem; line-height: 1.4; background: #F8FAFC; }
 .chapter-picker-help { margin: 0!important; padding: 9px 14px!important; border-bottom: 1px solid var(--card-border); color: #475569!important; font-size: .7rem!important; line-height: 1.45; background: #F8FAFC; }
 .topic-preview-header .remove-topic-preview { border: 1px solid #FCA5A5; border-radius: 6px; background: #FFF7F7; color: #B42318; padding: 7px 10px; font-size: .7rem; }
+.manual-selection-lock { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid #A7F3D0; border-radius: 8px; background: #ECFDF5; color: #065F46; }
+.manual-selection-lock b { font-size: .82rem; }
+.manual-selection-lock span { color: #047857; font-size: .72rem; line-height: 1.45; }
+.taxonomy-loading, .taxonomy-inline-state { display: block; margin: 0; color: var(--text-muted); font-size: .74rem; line-height: 1.45; }
+.taxonomy-inline-state { padding: 8px 10px; border: 1px solid var(--card-border); border-radius: 7px; background: #F8FAFC; }
+.badge-reused { background: #FFF7ED; color: #9A3412; border: 1px solid #FED7AA; }
+.question-reuse-note { display: flex; align-items: flex-start; gap: 7px; padding: 9px 11px; border: 1px solid #FED7AA; border-radius: 7px; background: #FFF7ED; color: #9A3412; font-size: .72rem; line-height: 1.45; }
+.question-reuse-note svg { flex: 0 0 auto; margin-top: 2px; }
 @media (max-width:1100px) { .topic-preview-header { align-items: flex-start; flex-direction: column; } .topic-preview-actions { flex-wrap: wrap; } }
 
 /* Paper Studio: one focused builder step at a time. The question list owns its

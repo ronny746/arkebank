@@ -52,22 +52,7 @@ export default function SavedPapersView({
         }
       }
     } catch (e) {
-      console.warn('API fetch failed, falling back to localStorage', e);
-    }
-
-    // 2. Merge with LocalStorage papers
-    try {
-      const local = JSON.parse(localStorage.getItem('arke_saved_papers') || '[]');
-      if (Array.isArray(local) && local.length > 0) {
-        const existingIds = new Set(loadedList.map((p) => p.id));
-        local.forEach((p: SavedPaper) => {
-          if (!existingIds.has(p.id)) {
-            loadedList.push(p);
-          }
-        });
-      }
-    } catch (e) {
-      console.warn('Failed to parse localStorage saved papers', e);
+      console.warn('Could not fetch saved papers from the database', e);
     }
 
     setPapers(loadedList);
@@ -125,32 +110,26 @@ export default function SavedPapersView({
   const handleDelete = async (paperId: string) => {
     if (!confirm('Are you sure you want to delete this saved paper?')) return;
 
-    // 1. Remove from LocalStorage
-    try {
-      const local = JSON.parse(localStorage.getItem('arke_saved_papers') || '[]');
-      const filtered = local.filter((p: any) => p.id !== paperId);
-      localStorage.setItem('arke_saved_papers', JSON.stringify(filtered));
-    } catch (e) {
-      // ignore
-    }
-
-    // 2. Remove via API
+    // Remove via the database API.
     try {
       const token = localStorage.getItem('arke_token');
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      await fetch(`/api/paper/saved/${paperId}`, {
+      const response = await fetch(`/api/paper/saved/${paperId}`, {
         method: 'DELETE',
         headers,
         credentials: 'include',
       });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Could not delete the paper from the database.');
+      }
+      setPapers((prev) => prev.filter((p) => p.id !== paperId));
+      showToast('Paper deleted from library.');
     } catch (e) {
-      // ignore
+      showToast(e instanceof Error ? e.message : 'Could not delete the paper from the database.');
     }
-
-    setPapers((prev) => prev.filter((p) => p.id !== paperId));
-    showToast('Paper deleted from library.');
   };
 
   return (

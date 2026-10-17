@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { withQuestionType } from '@/lib/question-types';
 
 export async function POST(req: Request) {
   try {
@@ -74,21 +75,7 @@ export async function POST(req: Request) {
     if (pyqOnly) {
       baseMatch.year = { $gt: 1990 };
     }
-    // Question type filtering (MCQ, Subjective, Numerical, True/False, or Mix)
-    if (questionType === 'mcq') {
-      baseMatch['options.0.text'] = { $exists: true, $ne: '' };
-    } else if (questionType === 'subjective') {
-      baseMatch['options.0.text'] = '';
-    } else if (questionType === 'numerical') {
-      baseMatch['options.0.text'] = '';
-      baseMatch['correct_answer'] = { $exists: true, $ne: '' };
-    } else if (questionType === 'true_false') {
-      baseMatch['$or'] = [
-        { question: { $regex: 'true or false|सत्य या असत्य|सत्य/असत्य', $options: 'i' } },
-        { 'options.0.text': { $regex: '^true$|^false$|^सत्य$|^असत्य$', $options: 'i' } },
-      ];
-    }
-    // If questionType is 'all' or 'mix', no filter is applied so all question types are naturally mixed!
+    Object.assign(baseMatch, withQuestionType(baseMatch, questionType));
 
     const { db } = await connectToDatabase();
     const questionsCol = db.collection('questions');

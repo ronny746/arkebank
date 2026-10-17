@@ -15,17 +15,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     });
 
     if (!exam || exam.status !== 'published') {
-      return NextResponse.json({ success: false, error: 'Exam not found or unavailable.' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Exam not found or unavailable.' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
     }
 
     const now = Date.now();
     if (now < new Date(String(exam.startsAt)).getTime() || now > new Date(String(exam.endsAt)).getTime()) {
-      return NextResponse.json({ success: false, error: 'This exam is not available at this time.' }, { status: 403 });
+      return NextResponse.json({ success: false, error: 'This exam is not available at this time.' }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
     }
 
-    return NextResponse.json({ success: true, exam });
+    return NextResponse.json({ success: true, exam }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
     console.error('Public exam fetch error:', err);
-    return NextResponse.json({ success: false, error: 'Failed to load exam.' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to load exam.' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
   }
 }

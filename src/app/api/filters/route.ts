@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { cached } from '@/lib/cache';
+import { QUESTION_TYPE_OPTIONS, withQuestionType } from '@/lib/question-types';
 
 export async function GET(req: Request) {
   try {
@@ -32,8 +33,13 @@ export async function GET(req: Request) {
       const syllabusCol = db.collection('syllabus');
       const questionsCol = db.collection('questions');
 
-      // 1. Fetch dynamic classes from syllabus / questions
-      const dynamicClasses = await syllabusCol.distinct('class_std');
+      // 1. Paper Studio must not offer empty streams. The bank can show the
+      // complete taxonomy, but generator choices must have usable records.
+      const classQuestionScope: Record<string, unknown> = {};
+      if (lang && lang !== 'all') classQuestionScope.lang = lang;
+      const dynamicClasses = (withQuestions
+        ? await questionsCol.distinct('class_std', classQuestionScope)
+        : await syllabusCol.distinct('class_std')).filter(Boolean);
       const standardPriority = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'JM', 'JA', 'NEET', 'Competitive Exam'];
       const sortedClasses = dynamicClasses.sort((a, b) => {
         const idxA = standardPriority.indexOf(a);
@@ -56,6 +62,17 @@ export async function GET(req: Request) {
         ? await questionsCol.distinct('subject', questionScope)
         : await syllabusCol.distinct('subject', syllabusQuery)
       ).filter(Boolean).sort();
+
+      // Show only formats that genuinely exist for the active class + subject.
+      const typeScope: Record<string, unknown> = { ...questionScope };
+      if (subject && subject !== 'all') typeScope.subject = subject;
+      const typeCounts = await Promise.all(
+        QUESTION_TYPE_OPTIONS.filter((item) => item.id !== 'all').map(async (item) => ({
+          id: item.id,
+          count: await questionsCol.countDocuments(withQuestionType(typeScope, item.id)),
+        })),
+      );
+      const questionTypes = ['all', ...typeCounts.filter((item) => item.count > 0).map((item) => item.id)];
 
       // 3. Fetch dynamic topics/chapters and subtopics from precomputed syllabus
       let topics: string[] = [];
@@ -118,6 +135,7 @@ export async function GET(req: Request) {
       return {
         classes: sortedClasses,
         subjects: dynamicSubjects,
+        questionTypes,
         topics,
         subTopics,
         years: validYears,

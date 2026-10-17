@@ -4,11 +4,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   QuestionItem, 
   PaperMetadata, 
-  PaperBlueprintConfig 
+  PaperBlueprintConfig,
+  SavedPaper,
 } from '@/types/paper';
 import MathRenderer from '../MathRenderer';
 import PaperPrintableDocument from './PaperPrintableDocument';
 import ExamCreatorModal from '../exams/ExamCreatorModal';
+import { QUESTION_TYPE_OPTIONS, type QuestionType } from '@/lib/question-types';
 import { 
   Sparkles, 
   Printer, 
@@ -55,6 +57,7 @@ interface PaperGeneratorViewProps {
   onImageZoom: (url: string, title?: string) => void;
   showToast: (msg: string) => void;
   onNavigateToBank: () => void;
+  initialPaper?: SavedPaper | null;
 }
 
 const compactQuestionText = (value?: string, limit = 260) => {
@@ -70,6 +73,16 @@ const compactQuestionText = (value?: string, limit = 260) => {
   return plain.length > limit ? `${plain.slice(0, limit).trim()}…` : plain;
 };
 
+const dedupeQuestions = (questions: QuestionItem[]) => {
+  const seen = new Set<string>();
+  return questions.filter((question) => {
+    const identity = String(question._id || question.id);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+};
+
 type QuestionUsage = {
   paperId: string;
   title: string;
@@ -83,6 +96,7 @@ export default function PaperGeneratorView({
   onImageZoom,
   showToast,
   onNavigateToBank,
+  initialPaper,
 }: PaperGeneratorViewProps) {
   // Active Studio Tab: editor | preview (student paper) | solutions (teacher key)
   const [studioTab, setStudioTab] = useState<'editor' | 'preview' | 'solutions'>('editor');
@@ -100,7 +114,11 @@ export default function PaperGeneratorView({
   const [selectedSubject, setSelectedSubject] = useState<string>(subjectsList[0] || 'Physics');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([subjectsList[0] || 'Physics']);
   const [pickerSubject, setPickerSubject] = useState<string>(subjectsList[0] || 'Physics');
-  const [availableTopics, setAvailableTopics] = useState<string[]>(topicsList || []);
+  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
+  const [taxonomyLoading, setTaxonomyLoading] = useState<boolean>(true);
+  const [taxonomyError, setTaxonomyError] = useState<string>('');
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [chapterSearch, setChapterSearch] = useState<string>('');
   const [showAllTopics, setShowAllTopics] = useState(false);
@@ -121,14 +139,15 @@ export default function PaperGeneratorView({
   const [switchingLang, setSwitchingLang] = useState(false);
   const [pyqOnly, setPyqOnly] = useState<boolean>(false);
   const [hasImageOnly, setHasImageOnly] = useState<boolean>(false);
-  const [questionType, setQuestionType] = useState<'all' | 'mcq' | 'subjective' | 'numerical' | 'true_false'>('all');
+  const [questionType, setQuestionType] = useState<QuestionType>('all');
+  const [availableQuestionTypes, setAvailableQuestionTypes] = useState<QuestionType[]>(['all']);
 
   const isMultiSubjectExam = ['NEET', 'JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass);
   const eligibleSubjects = useMemo(() => {
-    if (selectedClass === 'NEET') return subjectsList.filter(subject => ['Physics', 'Chemistry', 'Biology'].includes(subject));
-    if (['JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass)) return subjectsList.filter(subject => ['Physics', 'Chemistry', 'Mathematics'].includes(subject));
-    return subjectsList;
-  }, [selectedClass, subjectsList]);
+    if (selectedClass === 'NEET') return availableSubjects.filter(subject => ['Physics', 'Chemistry', 'Biology'].includes(subject));
+    if (['JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass)) return availableSubjects.filter(subject => ['Physics', 'Chemistry', 'Mathematics'].includes(subject));
+    return availableSubjects;
+  }, [selectedClass, availableSubjects]);
 
   // Difficulty sliders (percentages)
   const [easyPct, setEasyPct] = useState<number>(30);
@@ -153,59 +172,26 @@ export default function PaperGeneratorView({
   const [saving, setSaving] = useState<boolean>(false);
   const [examCreatorOpen, setExamCreatorOpen] = useState(false);
 
+  // A library paper is fetched from MongoDB by SavedPapersView and passed
+  // through React state. It is never staged in localStorage.
+  useEffect(() => {
+    if (!initialPaper?.id || !Array.isArray(initialPaper.questions)) return;
+    setPaperQuestions(dedupeQuestions(initialPaper.questions));
+    setActivePaperId(initialPaper.id);
+    setActivePaperCreatedAt(initialPaper.createdAt || null);
+    setExamTitle(initialPaper.title || 'Untitled paper');
+    setInstituteName(initialPaper.instituteName || 'ARKE SCHOLARS ACADEMY');
+    setTimeAllowed(initialPaper.timeAllowed || '60 Mins');
+    setSelectedClass(initialPaper.class_std || 'all');
+    setSelectedSubject(initialPaper.subject || 'all');
+    setInstructions(initialPaper.instructions || []);
+    setBuilderMode('edit');
+    setStudioTab('editor');
+  }, [initialPaper]);
+
   // Editing single question state via EditTaggingModal
   const [replacementIndex, setReplacementIndex] = useState<number | null>(null);
   const [openSolutions, setOpenSolutions] = useState<Record<string | number, boolean>>({});
-
-  // Load saved draft from localStorage on initial render
-  useEffect(() => {
-    try {
-      const savedDraft = localStorage.getItem('arke_active_paper_draft');
-      if (savedDraft) {
-        const parsed = JSON.parse(savedDraft);
-        if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
-          setPaperQuestions(parsed.questions);
-          setBuilderMode('edit');
-          if (parsed.paperId) setActivePaperId(parsed.paperId);
-          if (parsed.paperCreatedAt) setActivePaperCreatedAt(parsed.paperCreatedAt);
-          if (parsed.examTitle) setExamTitle(parsed.examTitle);
-          if (parsed.instituteName) setInstituteName(parsed.instituteName);
-          if (parsed.timeAllowed) setTimeAllowed(parsed.timeAllowed);
-          if (parsed.selectedClass) setSelectedClass(parsed.selectedClass);
-          if (parsed.selectedSubject) setSelectedSubject(parsed.selectedSubject);
-          if (parsed.instructions) setInstructions(parsed.instructions);
-          if (parsed.optionFormat) setOptionFormat(parsed.optionFormat);
-          if (parsed.columnsMode) setColumnsMode(parsed.columnsMode);
-          if (parsed.optionsLayout) setOptionsLayout(parsed.optionsLayout);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to parse active draft', e);
-    }
-  }, []);
-
-  // Sync draft to localStorage whenever paper changes
-  useEffect(() => {
-    if (paperQuestions.length > 0) {
-      localStorage.setItem(
-        'arke_active_paper_draft',
-        JSON.stringify({
-          questions: paperQuestions,
-          paperId: activePaperId,
-          paperCreatedAt: activePaperCreatedAt,
-          examTitle,
-          instituteName,
-          timeAllowed,
-          selectedClass,
-          selectedSubject,
-          instructions,
-          optionFormat,
-          columnsMode,
-          optionsLayout,
-        })
-      );
-    }
-  }, [paperQuestions, activePaperId, activePaperCreatedAt, examTitle, instituteName, timeAllowed, selectedClass, selectedSubject, instructions, optionFormat, columnsMode, optionsLayout]);
 
   // A saved-paper lookup is deliberately separate from the question picker:
   // it adds a lightweight reuse warning without exposing other paper content.
@@ -239,7 +225,10 @@ export default function PaperGeneratorView({
 
   // Load topics dynamically when class/subject changes
   useEffect(() => {
+    const controller = new AbortController();
     async function fetchDynamicTopics() {
+      setTaxonomyLoading(true);
+      setTaxonomyError('');
       try {
         const token = localStorage.getItem('arke_token');
         const headers: Record<string, string> = {};
@@ -247,10 +236,34 @@ export default function PaperGeneratorView({
 
         const res = await fetch(
           `/api/filters?class_std=${encodeURIComponent(selectedClass)}&subject=${encodeURIComponent(pickerSubject)}&lang=${selectedLang}&withQuestions=true`,
-          { headers, credentials: 'include' }
+          { headers, credentials: 'include', signal: controller.signal }
         );
+        if (!res.ok) throw new Error('Could not load available subjects and chapters.');
         if (res.ok) {
           const data = await res.json();
+          if (controller.signal.aborted) return;
+          if (Array.isArray(data.classes) && data.classes.length > 0) {
+            setAvailableClasses(data.classes);
+            if (!data.classes.includes(selectedClass)) setSelectedClass(data.classes[0]);
+          }
+          if (Array.isArray(data.subjects)) {
+            setAvailableSubjects(data.subjects);
+            const eligible = data.subjects as string[];
+            const retainedSubjects = selectedSubjects.filter((subject) => eligible.includes(subject));
+            const nextSubjects = retainedSubjects.length ? retainedSubjects : eligible.slice(0, isMultiSubjectExam ? eligible.length : 1);
+            if (nextSubjects.length) {
+              if (nextSubjects.join('|') !== selectedSubjects.join('|')) setSelectedSubjects(nextSubjects);
+              setSelectedSubject(nextSubjects[0]);
+              if (!nextSubjects.includes(pickerSubject)) setPickerSubject(nextSubjects[0]);
+            }
+          }
+          if (Array.isArray(data.questionTypes)) {
+            const nextTypes = data.questionTypes.filter((type: unknown): type is QuestionType =>
+              QUESTION_TYPE_OPTIONS.some((option) => option.id === type),
+            );
+            setAvailableQuestionTypes(nextTypes.length ? nextTypes : ['all']);
+            if (!nextTypes.includes(questionType)) setQuestionType('all');
+          }
           setShowAllTopics(false);
           const nextScope = `${selectedClass}|${selectedLang}`;
           const scopeChanged = Boolean(topicScopeRef.current) && topicScopeRef.current !== nextScope;
@@ -271,11 +284,17 @@ export default function PaperGeneratorView({
           }
         }
       } catch (err) {
-        console.error('Error fetching topics:', err);
+        if (!controller.signal.aborted) {
+          console.error('Error fetching topics:', err);
+          setTaxonomyError('Available subjects could not be loaded. Try again in a moment.');
+        }
+      } finally {
+        if (!controller.signal.aborted) setTaxonomyLoading(false);
       }
     }
-    fetchDynamicTopics();
-  }, [pickerSubject, selectedClass, selectedLang]);
+    void fetchDynamicTopics();
+    return () => controller.abort();
+  }, [pickerSubject, selectedClass, selectedLang, selectedSubjects, isMultiSubjectExam, questionType]);
 
   // Filtered topics based on search input
   const filteredTopics = useMemo(() => {
@@ -363,6 +382,13 @@ export default function PaperGeneratorView({
       setPickerSubject(subject);
       return resolved;
     });
+  };
+
+  const openBalanceStep = () => {
+    // In teacher-picked mode, the paper contains exactly the questions the
+    // teacher reviewed. We never silently pad it with generated records.
+    if (paperQuestions.length > 0) setTotalQuestions(paperQuestions.length);
+    setBuilderStep(3);
   };
 
   const handleAddQuestionById = async () => {
@@ -723,8 +749,9 @@ export default function PaperGeneratorView({
 
       const data = await res.json();
       if (data.success && Array.isArray(data.questions)) {
-        setPaperQuestions(data.questions);
-        showToast(`✓ Paper successfully converted to ${targetLang === 'hi' ? 'Hindi' : 'English'} (${data.questions.length} Qs)!`);
+        const uniqueQuestions = dedupeQuestions(data.questions);
+        setPaperQuestions(uniqueQuestions);
+        showToast(`✓ Paper successfully converted to ${targetLang === 'hi' ? 'Hindi' : 'English'} (${uniqueQuestions.length} Qs)!`);
       } else {
         showToast(`Error switching paper language: ${data.error || 'Failed'}`);
       }
@@ -768,16 +795,7 @@ export default function PaperGeneratorView({
       optionsLayout,
     };
 
-    // 1. Save to Local Storage immediately
-    try {
-      const localList = JSON.parse(localStorage.getItem('arke_saved_papers') || '[]');
-      const updatedList = [paperPayload, ...localList.filter((p: any) => p.id !== paperId)];
-      localStorage.setItem('arke_saved_papers', JSON.stringify(updatedList));
-    } catch (e) {
-      console.warn('LocalStorage save failed', e);
-    }
-
-    // 2. Save to MongoDB
+    // Save to MongoDB. Paper data never falls back to browser storage.
     try {
       const token = localStorage.getItem('arke_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -793,12 +811,13 @@ export default function PaperGeneratorView({
       if (res.ok) {
         setActivePaperId(paperId);
         setActivePaperCreatedAt(createdAt);
-        showToast('💾 Paper saved successfully to Database and Local Storage!');
+        showToast('Paper saved to the shared database.');
       } else {
-        showToast('Paper saved locally.');
+        const data = await res.json().catch(() => null);
+        showToast(data?.error || 'Paper could not be saved to the database.');
       }
     } catch (err) {
-      showToast('Paper saved locally.');
+      showToast('Paper could not be saved to the database. Check the connection and try again.');
     } finally {
       setSaving(false);
     }
@@ -827,7 +846,6 @@ export default function PaperGeneratorView({
     setBuilderMode('configure');
     setBuilderStep(1);
     setResetArmed(false);
-    localStorage.removeItem('arke_active_paper_draft');
     showToast('Paper cleared. Ready to generate a new paper.');
   };
 
@@ -967,7 +985,7 @@ export default function PaperGeneratorView({
           <div className="builder-steps" aria-label="Paper builder steps">
             <button type="button" className={builderStep === 1 ? 'active' : ''} onClick={() => setBuilderStep(1)}><em>01</em> Blueprint</button><i></i>
             <button type="button" className={builderStep === 2 ? 'active' : ''} onClick={() => setBuilderStep(2)}><em>02</em> Pick questions</button><i></i>
-            <button type="button" className={builderStep === 3 ? 'active' : ''} onClick={() => setBuilderStep(3)}><em>03</em> Balance & build</button>
+            <button type="button" className={builderStep === 3 ? 'active' : ''} onClick={openBalanceStep}><em>03</em> Balance & build</button>
             <b>{paperQuestions.length} / {totalQuestions} selected</b>{paperQuestions.length > 0 && <button type="button" className="open-paper-button" onClick={() => { setBuilderMode('edit'); setStudioTab('editor'); }}>Open paper →</button>}
           </div>
           {/* Preset Buttons Bar */}
@@ -1005,16 +1023,20 @@ export default function PaperGeneratorView({
                 <div className="form-field full-col">
                   <label className="field-label">Target Class / Stream</label>
                   <div className="pill-grid">
-                    {classesList.map((cls) => (
+                    {taxonomyLoading && availableClasses.length === 0 ? <span className="taxonomy-loading">Loading available classes…</span> : availableClasses.map((cls) => (
                       <button
                         key={cls}
                         type="button"
                         onClick={() => {
                           setSelectedClass(cls);
-                          const defaults = cls === 'NEET' ? ['Physics', 'Chemistry', 'Biology'] : ['JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(cls) ? ['Physics', 'Chemistry', 'Mathematics'] : [selectedSubject];
-                          const available = defaults.filter(subject => subjectsList.includes(subject));
-                          setSelectedSubjects(available.length ? available : [selectedSubject]);
-                          if (available[0]) { setSelectedSubject(available[0]); setPickerSubject(available[0]); }
+                          // Do not leave stale subjects from the previous
+                          // class visible while the content-backed list loads.
+                          setSelectedSubjects([]);
+                          setAvailableSubjects([]);
+                          setAvailableTopics([]);
+                          setPickerSubject('');
+                          setPreviewTopic('');
+                          setTopicPreviewQuestions([]);
                         }}
                         className={`pill-option ${selectedClass === cls ? 'active' : ''}`}
                       >
@@ -1027,7 +1049,7 @@ export default function PaperGeneratorView({
                 <div className="form-field full-col">
                   <label className="field-label">{isMultiSubjectExam ? 'Subjects (select one or more)' : 'Subject'}</label>
                   <div className="pill-grid">
-                    {eligibleSubjects.map((sub) => (
+                    {taxonomyLoading ? <span className="taxonomy-loading">Checking subjects with questions…</span> : eligibleSubjects.map((sub) => (
                       <button
                         key={sub}
                         type="button"
@@ -1038,6 +1060,8 @@ export default function PaperGeneratorView({
                       </button>
                     ))}
                   </div>
+                  {!taxonomyLoading && taxonomyError && <p className="taxonomy-inline-state" role="status">{taxonomyError}</p>}
+                  {!taxonomyLoading && !taxonomyError && eligibleSubjects.length === 0 && <p className="taxonomy-inline-state" role="status">No subjects with questions are available for this class and language.</p>}
                 </div>
 
                 {/* Question Type / Pattern Selector */}
@@ -1047,17 +1071,11 @@ export default function PaperGeneratorView({
                     <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>Select format or mix all</span>
                   </div>
                   <div className="pill-grid question-type-grid">
-                    {[
-                      { id: 'all', label: '🔀 Mix of All Types', title: 'MCQ + Numerical + Subjective mixed' },
-                      { id: 'mcq', label: '🔘 MCQ Only', title: 'Only multiple choice (4 options A, B, C, D)' },
-                      { id: 'subjective', label: '✍️ Subjective / Theory', title: 'Descriptive and theory questions' },
-                      { id: 'numerical', label: '🔢 Numerical / Integer', title: 'Integer / numerical problems' },
-                      { id: 'true_false', label: '⚖️ True / False', title: 'True or False statements' },
-                    ].map((item) => (
+                    {QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id)).map((item) => (
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setQuestionType(item.id as any)}
+                        onClick={() => setQuestionType(item.id)}
                         className={`pill-option ${questionType === item.id ? 'active' : ''}`}
                         title={item.title}
                       >
@@ -1188,20 +1206,14 @@ export default function PaperGeneratorView({
                         <h4>{replacementIndex !== null ? `Choose a replacement for Question ${replacementIndex + 1}${previewTopic ? ` · ${previewTopic}` : ''}` : previewTopic ? `${previewTopic} questions` : 'Choose a chapter to inspect questions'}</h4>
                         {previewTopic && (
                           <div className="picker-type-filter-row">
-                            {[
-                              { id: 'all', label: 'All' },
-                              { id: 'mcq', label: 'MCQs' },
-                              { id: 'subjective', label: 'Subjective' },
-                              { id: 'numerical', label: 'Numerical' },
-                              { id: 'true_false', label: 'True/False' },
-                            ].map((t) => (
+                            {QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id)).map((t) => (
                               <button
                                 key={t.id}
                                 type="button"
-                                onClick={() => setQuestionType(t.id as any)}
+                                onClick={() => setQuestionType(t.id)}
                                 className={`picker-type-btn ${questionType === t.id ? 'active' : ''}`}
                               >
-                                {t.label}
+                                {t.shortLabel}
                               </button>
                             ))}
                           </div>
@@ -1280,66 +1292,39 @@ export default function PaperGeneratorView({
                     <label className="field-label" style={{ marginBottom: 0 }}>Total Questions Count</label>
                     {paperQuestions.length > 0 && (
                       <span style={{ fontSize: '0.74rem', background: '#EFF6FF', color: '#1D4ED8', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
-                        ✓ {paperQuestions.length} Questions Picked from Chapters
+                        ✓ Manual selection: {paperQuestions.length} questions
                       </span>
                     )}
                   </div>
-                  <div className="number-stepper-row">
-                    {paperQuestions.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setTotalQuestions(paperQuestions.length)}
-                        className={`stepper-pill selected-count-pill ${totalQuestions === paperQuestions.length ? 'active' : ''}`}
-                        title="Keep only the questions selected from chapters"
-                      >
-                        ✓ Selected ({paperQuestions.length} Qs)
-                      </button>
-                    )}
-                    {Array.from(new Set([
-                      ...(paperQuestions.length > 0 ? [
-                        paperQuestions.length,
-                        paperQuestions.length + 5,
-                        paperQuestions.length + 10,
-                        Math.max(25, paperQuestions.length + 15),
-                      ] : [10, 15, 20, 25, 30, 45, 50, 75])
-                    ])).filter(n => n > 0).slice(0, 7).map((cnt) => (
-                      <button
-                        key={cnt}
-                        type="button"
-                        onClick={() => setTotalQuestions(cnt)}
-                        className={`stepper-pill ${totalQuestions === cnt ? 'active' : ''}`}
-                      >
-                        {cnt} Qs
-                      </button>
-                    ))}
-                    <div className="custom-count-wrap">
-                      <span className="custom-count-label">Custom:</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={180}
-                        value={totalQuestions}
-                        onChange={(e) => setTotalQuestions(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        className="custom-stepper-input"
-                        title="Custom questions count"
-                      />
+                  {paperQuestions.length > 0 ? (
+                    <div className="manual-selection-lock" role="status">
+                      <b>{paperQuestions.length} questions selected</b>
+                      <span>This paper will contain only the questions you picked. Go back to “Pick questions” to add or remove any question.</span>
                     </div>
-                  </div>
-
-                  {paperQuestions.length > 0 && (
-                    <div className="slots-breakdown-info">
-                      <span className="breakdown-tag selected-tag">
-                        <b>{paperQuestions.length}</b> questions already selected from chapters
-                      </span>
-                      {totalQuestions > paperQuestions.length ? (
-                        <span className="breakdown-tag needed-tag">
-                          <b>+{totalQuestions - paperQuestions.length}</b> will be generated from databank
-                        </span>
-                      ) : (
-                        <span className="breakdown-tag exact-tag">
-                          ✓ Paper will use exact {paperQuestions.length} selected questions
-                        </span>
-                      )}
+                  ) : (
+                    <div className="number-stepper-row">
+                      {[10, 15, 20, 25, 30, 45, 50, 75].map((cnt) => (
+                        <button
+                          key={cnt}
+                          type="button"
+                          onClick={() => setTotalQuestions(cnt)}
+                          className={`stepper-pill ${totalQuestions === cnt ? 'active' : ''}`}
+                        >
+                          {cnt} Qs
+                        </button>
+                      ))}
+                      <div className="custom-count-wrap">
+                        <span className="custom-count-label">Custom:</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={180}
+                          value={totalQuestions}
+                          onChange={(e) => setTotalQuestions(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          className="custom-stepper-input"
+                          title="Custom questions count"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1401,17 +1386,11 @@ export default function PaperGeneratorView({
                 <div className="form-field full-col">
                   <label className="field-label">Question Pattern (प्रश्न प्रकार)</label>
                   <div className="pill-grid question-type-grid">
-                    {[
-                      { id: 'all', label: '🔀 Mix All Types' },
-                      { id: 'mcq', label: '🔘 MCQ Only' },
-                      { id: 'subjective', label: '✍️ Subjective' },
-                      { id: 'numerical', label: '🔢 Numerical' },
-                      { id: 'true_false', label: '⚖️ True / False' },
-                    ].map((item) => (
+                    {QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id)).map((item) => (
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setQuestionType(item.id as any)}
+                        onClick={() => setQuestionType(item.id)}
                         className={`pill-option ${questionType === item.id ? 'active' : ''}`}
                       >
                         {item.label}
@@ -1527,6 +1506,8 @@ export default function PaperGeneratorView({
                   <span>
                     {generating
                       ? 'Generating from 5.27 Lakh Databank...'
+                      : paperQuestions.length > 0
+                      ? `Open paper with ${paperQuestions.length} selected questions`
                       : `⚡ Generate ${totalQuestions} Questions Paper`}
                   </span>
                 </button>
@@ -1546,10 +1527,11 @@ export default function PaperGeneratorView({
                   type="button"
                   className="wizard-next-button"
                   onClick={() => {
-                    if (builderStep === 2 && paperQuestions.length > 0 && totalQuestions < paperQuestions.length) {
-                      setTotalQuestions(paperQuestions.length);
+                    if (builderStep === 2) {
+                      openBalanceStep();
+                      return;
                     }
-                    setBuilderStep((builderStep + 1) as 2 | 3);
+                    setBuilderStep(2);
                   }}
                 >
                   {builderStep === 1 ? 'Choose chapters' : 'Set paper balance'} <ChevronRight size={16} />

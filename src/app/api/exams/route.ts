@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { randomBytes, randomUUID } from 'crypto';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { delCache } from '@/lib/cache';
 
 const admin = (req: Request) => extractAndVerifyToken(req);
 
@@ -37,11 +38,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: 'Choose a valid start and end time.' }, { status: 400 });
   }
   const now = new Date().toISOString();
+  const seenQuestionIds = new Set<string>();
+  const uniqueQuestions = body.paper.questions.filter((question: Record<string, unknown>) => {
+    const key = String(question._id || question.id || '');
+    if (!key || seenQuestionIds.has(key)) return false;
+    seenQuestionIds.add(key);
+    return true;
+  });
+  if (!uniqueQuestions.length) {
+    return NextResponse.json({ success: false, error: 'The paper must contain at least one unique question.' }, { status: 400 });
+  }
   const exam = {
     id: randomUUID(), slug: randomBytes(9).toString('base64url'), title: body.title.trim(),
     description: String(body.description || ''), paperId: body.paper.id || undefined,
     paper: { title: body.paper.title, class_std: body.paper.class_std, subject: body.paper.subject, timeAllowed: body.paper.timeAllowed, totalMarks: body.paper.totalMarks, instructions: body.paper.instructions || [] },
-    questions: body.paper.questions, status: body.status === 'draft' ? 'draft' : 'published',
+    questions: uniqueQuestions, status: body.status === 'draft' ? 'draft' : 'published',
     startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), durationMinutes,
     showResultsAfterSubmit: Boolean(body.showResultsAfterSubmit),
     security: { requireFullScreen: body.security?.requireFullScreen !== false, disableCopyPaste: body.security?.disableCopyPaste !== false, maxTabSwitchesAllowed: Math.max(1, Math.min(10, Number(body.security?.maxTabSwitchesAllowed) || 3)) },
@@ -49,11 +60,13 @@ export async function POST(req: Request) {
   };
   const { db } = await connectToDatabase();
   await db.collection('exams').insertOne(exam);
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://bank.arkescholar.com").replace(/\/$/, "");
+  await delCache(`exam:public:${exam.slug}`);
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://bank.arkescholar.com').replace(/\/$/, '');
   return NextResponse.json({
     success: true,
     exam,
     publicUrl: `/e/${exam.slug}`,
     liveUrl: `${baseUrl}/e/${exam.slug}`,
+    duplicatesRemoved: body.paper.questions.length - uniqueQuestions.length,
   }, { status: 201 });
 }

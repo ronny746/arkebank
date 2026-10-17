@@ -2,6 +2,7 @@ import { cached } from '@/lib/cache';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { withQuestionType } from '@/lib/question-types';
 
 export async function GET(req: Request) {
   try {
@@ -61,19 +62,7 @@ export async function GET(req: Request) {
     if (exam && exam !== 'all') {
       query.question_exams = { $regex: exam, $options: 'i' };
     }
-    if (question_type === 'mcq') {
-      query['options.0.text'] = { $exists: true, $ne: '' };
-    } else if (question_type === 'subjective') {
-      query['options.0.text'] = '';
-    } else if (question_type === 'numerical') {
-      query['options.0.text'] = '';
-      query['correct_answer'] = { $exists: true, $ne: '' };
-    } else if (question_type === 'true_false') {
-      query['$or'] = [
-        { question: { $regex: 'true or false|सत्य या असत्य|सत्य/असत्य', $options: 'i' } },
-        { 'options.0.text': { $regex: '^true$|^false$|^सत्य$|^असत्य$', $options: 'i' } }
-      ];
-    }
+    Object.assign(query, withQuestionType(query, question_type));
 
     if (has_image === 'true') {
       query.$or = [

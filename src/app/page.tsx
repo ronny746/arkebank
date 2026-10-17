@@ -27,7 +27,7 @@ import DashboardView from '@/components/DashboardView';
 import ExamManagementView from '@/components/exams/ExamManagementView';
 import PaperGeneratorView from '@/components/paper/PaperGeneratorView';
 import SavedPapersView from '@/components/paper/SavedPapersView';
-import { QuestionItem, SavedPaper } from '@/types/paper';
+import { SavedPaper } from '@/types/paper';
 import LoginForm from '@/components/LoginForm';
 import QuestionCard from '@/components/QuestionCard';
 import ImageModal from '@/components/ImageModal';
@@ -87,70 +87,18 @@ export default function Home({ initialTab = 'dashboard' }: { initialTab?: Portal
   const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Paper Generator Navigation & Basket State
+  // Paper Generator navigation and the currently loaded database paper.
   const [activeNavTab, setActiveNavTab] = useState<PortalView>(initialTab);
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [basketQuestions, setBasketQuestions] = useState<QuestionItem[]>([]);
+  const [loadedPaper, setLoadedPaper] = useState<SavedPaper | null>(null);
 
   const navigate = (view: PortalView) => {
     setActiveNavTab(view);
     router.push(portalPath[view]);
   };
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('arke_paper_basket');
-      if (saved) {
-        setBasketQuestions(JSON.parse(saved));
-      }
-    } catch (e) {
-      // ignore
-    }
-  }, []);
-
-  const handleToggleBasket = (q: any) => {
-    const qId = q._id || q.id;
-    const exists = basketQuestions.some((item) => (item._id || item.id) === qId);
-    let updated: QuestionItem[] = [];
-    if (exists) {
-      updated = basketQuestions.filter((item) => (item._id || item.id) !== qId);
-      showToast(`Question #${q.id} removed from Paper Draft.`);
-    } else {
-      updated = [...basketQuestions, q];
-      showToast(`✓ Question #${q.id} added to Paper Draft (${updated.length} Qs).`);
-    }
-    setBasketQuestions(updated);
-    localStorage.setItem('arke_paper_basket', JSON.stringify(updated));
-  };
-
-  const handleRemoveFromBasket = (id: string | number) => {
-    const updated = basketQuestions.filter((item) => (item._id || item.id) !== id);
-    setBasketQuestions(updated);
-    localStorage.setItem('arke_paper_basket', JSON.stringify(updated));
-    showToast('Question removed from Paper Draft.');
-  };
-
-  const handleClearBasket = () => {
-    setBasketQuestions([]);
-    localStorage.removeItem('arke_paper_basket');
-    showToast('Paper Basket cleared.');
-  };
-
   const handleLoadSavedPaper = (paper: SavedPaper) => {
-    localStorage.setItem(
-      'arke_active_paper_draft',
-      JSON.stringify({
-        questions: paper.questions || [],
-        examTitle: paper.title,
-        instituteName: paper.instituteName,
-        timeAllowed: paper.timeAllowed,
-        selectedClass: paper.class_std,
-        selectedSubject: paper.subject,
-        instructions: paper.instructions,
-        paperId: paper.id,
-        paperCreatedAt: paper.createdAt,
-      })
-    );
+    setLoadedPaper(paper);
     navigate('generator');
     showToast(`Loaded "${paper.title}" into Paper Studio!`);
   };
@@ -955,6 +903,7 @@ export default function Home({ initialTab = 'dashboard' }: { initialTab?: Portal
           onImageZoom={(url, title) => setZoomImage({ url, title })}
           showToast={showToast}
           onNavigateToBank={() => navigate('bank')}
+          initialPaper={loadedPaper}
         />
       )}
 
