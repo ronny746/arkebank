@@ -2001,9 +2001,10 @@ export default function PaperGeneratorView({
           {studioTab === 'preview' && (
             <div className="studio-printable-container">
               <div className="print-toolbar hide-print">
-                <span className="print-hint">
-                  📄 Official Student Question Paper Format. Answers and solutions are completely hidden for test execution.
-                </span>
+                <div className="print-hint">
+                  <span>📄 Official Student Question Paper Format. Answers and solutions are completely hidden for test execution.</span>
+                  <small>For a clean PDF, turn off “Headers and footers” in the browser print dialog.</small>
+                </div>
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -2030,9 +2031,10 @@ export default function PaperGeneratorView({
           {studioTab === 'solutions' && (
             <div className="studio-printable-container">
               <div className="print-toolbar hide-print">
-                <span className="print-hint">
-                  🔑 Teacher Evaluation & Step-by-Step Solutions Booklet with Quick Answer Matrix.
-                </span>
+                <div className="print-hint">
+                  <span>🔑 Teacher Evaluation &amp; Step-by-Step Solutions Booklet with Quick Answer Matrix.</span>
+                  <small>For a clean PDF, turn off “Headers and footers” in the browser print dialog.</small>
+                </div>
                 <button
                   type="button"
                   onClick={() => window.print()}

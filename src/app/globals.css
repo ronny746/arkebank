@@ -4235,6 +4235,10 @@ body {
   font-weight: 600;
 }
 
+.print-hint span,
+.print-hint small { display: block; }
+.print-hint small { margin-top: 4px; color: #9a3412; font-size: .73rem; font-weight: 700; }
+
 .btn-toolbar-print {
   background: linear-gradient(135deg, #1F3268, #142247);
   color: #FFFFFF;
@@ -5098,7 +5102,29 @@ body {
   }
 
   .paper-watermark {
-    opacity: 0.08 !important;
+    /* The screen colour used two alpha layers, which made the watermark almost
+       invisible in Chromium PDFs. Print it as visible text, not a background. */
+    color: rgba(31, 50, 104, 0.14) !important;
+    opacity: 1 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Fixed positioned content repeats on every printed page. This keeps the
+     ARKE SCHOLARS authenticity mark present after the first page as well. */
+  .paper-watermark-layer {
+    position: fixed !important;
+    inset: 15mm 10mm !important;
+    z-index: 1 !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .paper-exam-header,
+  .quick-answer-matrix,
+  .paper-questions-flow {
+    z-index: 2 !important;
   }
 }
 
