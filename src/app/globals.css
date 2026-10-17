@@ -6156,6 +6156,48 @@ body {
 .reuse-summary-pill.has-reuse { background: #fff7ed; border-color: #fed7aa; }
 .reuse-summary-pill.has-reuse .stat-label, .reuse-summary-pill.has-reuse .stat-value { color: #9a3412; }
 
+/* The final paper editor is a dedicated workspace, not a narrow portal pane.
+   It intentionally covers the shell while retaining an explicit exit action. */
+.paper-generator-wrapper.studio-focus-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 18px clamp(18px, 3vw, 56px) 48px;
+  overflow-y: auto;
+  background: #f4f7fb;
+}
+
+.paper-generator-wrapper.studio-focus-mode .paper-studio-nav {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0 0 18px;
+  border-top: 3px solid var(--brand-emerald);
+  border-radius: 12px;
+}
+
+.paper-generator-wrapper.studio-focus-mode .studio-editor-view,
+.paper-generator-wrapper.studio-focus-mode .paper-preview-panel,
+.paper-generator-wrapper.studio-focus-mode .teacher-solutions-panel {
+  width: min(1800px, 100%);
+  margin-inline: auto;
+}
+
+.btn-exit-studio { background: #fff; color: #334155; border-color: #cbd5e1; }
+.btn-exit-studio:hover { background: #f8fafc; border-color: #94a3b8; }
+
+@media (max-width: 840px) {
+  .paper-generator-wrapper.studio-focus-mode { padding: 10px 12px 28px; }
+  .paper-generator-wrapper.studio-focus-mode .paper-studio-nav { top: 0; padding: 10px; }
+  .paper-generator-wrapper.studio-focus-mode .studio-nav-left,
+  .paper-generator-wrapper.studio-focus-mode .studio-nav-actions { width: 100%; }
+  .paper-generator-wrapper.studio-focus-mode .studio-nav-actions { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+  .paper-generator-wrapper.studio-focus-mode .btn-studio-action { flex: 0 0 auto; }
+}
+
 .exam-card-header-right {
   display: flex;
   align-items: center;

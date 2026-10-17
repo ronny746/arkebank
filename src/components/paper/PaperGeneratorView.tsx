@@ -47,7 +47,8 @@ import {
   Columns,
   LayoutList,
   Languages,
-  ShieldCheck
+  ShieldCheck,
+  Minimize2,
 } from 'lucide-react';
 
 interface PaperGeneratorViewProps {
@@ -171,6 +172,13 @@ export default function PaperGeneratorView({
   const [swappingId, setSwappingId] = useState<string | number | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
   const [examCreatorOpen, setExamCreatorOpen] = useState(false);
+  const [studioFocusMode, setStudioFocusMode] = useState(false);
+
+  // Editing a completed paper is a focused faculty task. Default it to the
+  // full-screen studio, while keeping an explicit exit control in the toolbar.
+  useEffect(() => {
+    if (builderMode === 'edit') setStudioFocusMode(true);
+  }, [builderMode]);
 
   // Deep-linking a saved paper fetches its authoritative MongoDB document
   // after navigation, so Studio opens directly in final edit mode.
@@ -912,7 +920,7 @@ export default function PaperGeneratorView({
   };
 
   return (
-    <div className="paper-generator-wrapper">
+    <div className={`paper-generator-wrapper ${studioFocusMode && builderMode === 'edit' ? 'studio-focus-mode' : ''}`}>
       {/* Top Paper Studio Navigation & Quick Actions Bar */}
       {builderMode === 'edit' && <div className="paper-studio-nav">
         <div className="studio-nav-left">
@@ -998,6 +1006,17 @@ export default function PaperGeneratorView({
                 <RotateCcw size={12} />
                 <span>{resetArmed ? 'Confirm clear' : 'New Paper'}</span>
               </button>
+              {studioFocusMode && (
+                <button
+                  type="button"
+                  onClick={() => setStudioFocusMode(false)}
+                  className="btn-studio-action btn-exit-studio"
+                  title="Return to the workspace navigation"
+                >
+                  <Minimize2 size={13} />
+                  <span>Exit full studio</span>
+                </button>
+              )}
             </>
           ) : null}
         </div>
