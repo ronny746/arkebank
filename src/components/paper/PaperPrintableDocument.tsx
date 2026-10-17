@@ -25,6 +25,15 @@ export default function PaperPrintableDocument({
   optionsLayout = '2-col',
 }: PaperPrintableDocumentProps) {
   const isSolutions = mode === 'solutions';
+  const [printTimestamp, setPrintTimestamp] = React.useState('');
+
+  React.useEffect(() => {
+    setPrintTimestamp(new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date()));
+  }, []);
+
   const printableQuestions = useMemo(() => {
     const seen = new Set<string>();
     return questions.filter((question) => {
@@ -54,6 +63,7 @@ export default function PaperPrintableDocument({
 
   return (
     <div className={`paper-printable-root ${isSolutions ? 'mode-solutions' : 'mode-paper'} layout-${columnsMode}`}>
+      <div className="paper-print-timestamp" aria-label="Printed on">{printTimestamp}</div>
       {/* Watermark (for authentic official exam look) */}
       {metadata.showWatermark !== false && (
         <div className="paper-watermark-layer" aria-hidden="true">
