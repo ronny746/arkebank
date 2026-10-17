@@ -5005,8 +5005,17 @@ body {
    PRINT MEDIA RULES (FLAWLESS A4 PHYSICAL PRINTING)
    ========================================================================== */
 
+@page {
+  size: A4 portrait;
+  margin: 11mm 10mm 13mm;
+}
+
 @media print {
+  html,
   body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     background: #FFFFFF !important;
     color: #000000 !important;
     font-size: 11pt !important;
@@ -5029,7 +5038,14 @@ body {
 
   .portal-wrapper,
   .paper-generator-wrapper,
+  .paper-generator-wrapper.studio-focus-mode,
+  .paper-studio-container,
   .studio-printable-container {
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
@@ -5037,16 +5053,34 @@ body {
   }
 
   .paper-printable-root {
+    position: relative !important;
     box-shadow: none !important;
     border: none !important;
     padding: 0 !important;
+    width: auto !important;
     max-width: 100% !important;
     min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .paper-exam-header,
+  .paper-candidate-box,
+  .paper-instructions-box {
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+  }
+
+  .paper-questions-flow {
+    overflow: visible !important;
   }
 
   .paper-question-block {
-    break-inside: avoid !important;
+    display: block !important;
+    width: auto !important;
+    overflow: visible !important;
+    break-inside: avoid-page !important;
     page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
   }
 
   .paper-watermark {
@@ -6266,6 +6300,25 @@ body {
   .paper-generator-wrapper.studio-focus-mode .studio-nav-actions { width: 100%; }
   .paper-generator-wrapper.studio-focus-mode .studio-nav-actions { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
   .paper-generator-wrapper.studio-focus-mode .btn-studio-action { flex: 0 0 auto; }
+}
+
+/* The full-screen editor is deliberately fixed on screen. Reset it after the
+   screen rules for print, otherwise Chromium prints only its scroll viewport. */
+@media print {
+  .paper-generator-wrapper.studio-focus-mode {
+    position: static !important;
+    inset: auto !important;
+    z-index: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .paper-generator-wrapper.studio-focus-mode .paper-studio-nav {
+    position: static !important;
+  }
 }
 
 .exam-card-header-right {
