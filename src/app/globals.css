@@ -5023,6 +5023,7 @@ body {
 
   .portal-header,
   .portal-main-nav,
+  .portal-side-nav,
   .portal-sidebar,
   .feed-toolbar,
   .pagination-bottom,
@@ -5034,6 +5035,19 @@ body {
   .hide-print,
   .paper-basket-floating-container {
     display: none !important;
+  }
+
+  /* Print only the document. The faculty workspace navigation is interactive
+     chrome, not part of a student-facing paper. */
+  .portal-app-shell {
+    display: block !important;
+    min-height: 0 !important;
+    background: #fff !important;
+  }
+
+  .portal-workspace {
+    width: 100% !important;
+    min-width: 0 !important;
   }
 
   .portal-wrapper,
