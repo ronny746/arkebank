@@ -893,6 +893,10 @@ export default function PaperGeneratorView({
   };
 
   const totalMarks = paperQuestions.reduce((s, q) => s + (Number(q.marks) || 4), 0);
+  const reusedQuestionCount = paperQuestions.filter((question) => {
+    const id = String(question._id || question.id || '');
+    return Boolean((questionUsage[id] || questionUsage[String(question.id)] || []).length);
+  }).length;
   const paperSubjectLabel = selectedSubjects.join(' + ');
 
   const currentMetadata: PaperMetadata = {
@@ -1688,6 +1692,10 @@ export default function PaperGeneratorView({
               <div className="stat-pill">
                 <span className="stat-label">Max Marks:</span>
                 <span className="stat-value">{totalMarks} (+{marksPerQuestion}/-{negativeMarks})</span>
+              </div>
+              <div className={`stat-pill reuse-summary-pill ${reusedQuestionCount ? 'has-reuse' : ''}`} title={reusedQuestionCount ? 'Open question cards to replace or remove reused questions.' : 'No questions in this paper were found in saved papers or exams.'}>
+                <span className="stat-label">Reuse check:</span>
+                <span className="stat-value">{reusedQuestionCount ? `${reusedQuestionCount} used before` : 'All new'}</span>
               </div>
             </div>
           </div>

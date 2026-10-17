@@ -6102,6 +6102,60 @@ body {
   color: #BE123C !important;
 }
 
+.exam-delete-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.56);
+  backdrop-filter: blur(3px);
+}
+
+.exam-delete-dialog {
+  position: relative;
+  width: min(500px, 100%);
+  border: 1px solid #fecdd3;
+  border-top: 4px solid #e11d48;
+  border-radius: 16px;
+  padding: 28px;
+  background: #fff;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
+}
+
+.exam-delete-dialog-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.exam-delete-dialog-close:hover { background: #f1f5f9; color: #0f172a; }
+.exam-delete-dialog-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 15px; border-radius: 12px; background: #fff1f2; color: #e11d48; }
+.exam-delete-dialog h2 { margin: 7px 0 10px; color: #172554; font-size: 1.35rem; }
+.exam-delete-dialog > p:not(.dashboard-eyebrow) { margin: 0; color: #475569; line-height: 1.6; font-size: .9rem; }
+.exam-delete-dialog-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 22px; }
+.exam-delete-dialog-summary span { padding: 6px 9px; border-radius: 999px; background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; font-size: .76rem; font-weight: 700; }
+.exam-delete-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.exam-delete-dialog-actions button { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; background: #fff; color: #1e293b; font: inherit; font-size: .82rem; font-weight: 800; cursor: pointer; }
+.exam-delete-dialog-actions .exam-delete-confirm { border-color: #e11d48; background: #e11d48; color: #fff; }
+.exam-delete-dialog-actions .exam-delete-confirm:hover { background: #be123c; border-color: #be123c; }
+.exam-delete-dialog-actions button:disabled, .exam-delete-dialog-close:disabled { cursor: wait; opacity: .6; }
+
+.reuse-summary-pill { background: #ecfdf5; border-color: #a7f3d0; }
+.reuse-summary-pill .stat-label, .reuse-summary-pill .stat-value { color: #047857; }
+.reuse-summary-pill.has-reuse { background: #fff7ed; border-color: #fed7aa; }
+.reuse-summary-pill.has-reuse .stat-label, .reuse-summary-pill.has-reuse .stat-value { color: #9a3412; }
+
 .exam-card-header-right {
   display: flex;
   align-items: center;
