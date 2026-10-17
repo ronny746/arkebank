@@ -42,7 +42,7 @@ const portalPath: Record<PortalView, string> = {
   dashboard: '/', bank: '/question-bank', generator: '/paper-generator', saved: '/saved-papers', exams: '/exams',
 };
 
-export default function Home({ initialTab = 'dashboard' }: { initialTab?: PortalView }) {
+export default function Home({ initialTab = 'dashboard', paperId }: { initialTab?: PortalView; paperId?: string }) {
   const router = useRouter();
   // Authentication State
   const [user, setUser] = useState<{ email: string } | null>(null);
@@ -87,10 +87,9 @@ export default function Home({ initialTab = 'dashboard' }: { initialTab?: Portal
   const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Paper Generator navigation and the currently loaded database paper.
+  // Paper Generator navigation. Saved paper payloads stay in MongoDB.
   const [activeNavTab, setActiveNavTab] = useState<PortalView>(initialTab);
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [loadedPaper, setLoadedPaper] = useState<SavedPaper | null>(null);
 
   const navigate = (view: PortalView) => {
     setActiveNavTab(view);
@@ -98,8 +97,8 @@ export default function Home({ initialTab = 'dashboard' }: { initialTab?: Portal
   };
 
   const handleLoadSavedPaper = (paper: SavedPaper) => {
-    setLoadedPaper(paper);
-    navigate('generator');
+    setActiveNavTab('generator');
+    router.push(`/paper-generator?paper=${encodeURIComponent(paper.id)}`);
     showToast(`Loaded "${paper.title}" into Paper Studio!`);
   };
 
@@ -903,7 +902,7 @@ export default function Home({ initialTab = 'dashboard' }: { initialTab?: Portal
           onImageZoom={(url, title) => setZoomImage({ url, title })}
           showToast={showToast}
           onNavigateToBank={() => navigate('bank')}
-          initialPaper={loadedPaper}
+          paperId={paperId}
         />
       )}
 

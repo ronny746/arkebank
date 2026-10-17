@@ -57,7 +57,7 @@ interface PaperGeneratorViewProps {
   onImageZoom: (url: string, title?: string) => void;
   showToast: (msg: string) => void;
   onNavigateToBank: () => void;
-  initialPaper?: SavedPaper | null;
+  paperId?: string;
 }
 
 const compactQuestionText = (value?: string, limit = 260) => {
@@ -96,7 +96,7 @@ export default function PaperGeneratorView({
   onImageZoom,
   showToast,
   onNavigateToBank,
-  initialPaper,
+  paperId,
 }: PaperGeneratorViewProps) {
   // Active Studio Tab: editor | preview (student paper) | solutions (teacher key)
   const [studioTab, setStudioTab] = useState<'editor' | 'preview' | 'solutions'>('editor');
@@ -172,22 +172,42 @@ export default function PaperGeneratorView({
   const [saving, setSaving] = useState<boolean>(false);
   const [examCreatorOpen, setExamCreatorOpen] = useState(false);
 
-  // A library paper is fetched from MongoDB by SavedPapersView and passed
-  // through React state. It is never staged in localStorage.
+  // Deep-linking a saved paper fetches its authoritative MongoDB document
+  // after navigation, so Studio opens directly in final edit mode.
   useEffect(() => {
-    if (!initialPaper?.id || !Array.isArray(initialPaper.questions)) return;
-    setPaperQuestions(dedupeQuestions(initialPaper.questions));
-    setActivePaperId(initialPaper.id);
-    setActivePaperCreatedAt(initialPaper.createdAt || null);
-    setExamTitle(initialPaper.title || 'Untitled paper');
-    setInstituteName(initialPaper.instituteName || 'ARKE SCHOLARS ACADEMY');
-    setTimeAllowed(initialPaper.timeAllowed || '60 Mins');
-    setSelectedClass(initialPaper.class_std || 'all');
-    setSelectedSubject(initialPaper.subject || 'all');
-    setInstructions(initialPaper.instructions || []);
-    setBuilderMode('edit');
-    setStudioTab('editor');
-  }, [initialPaper]);
+    if (!paperId) return;
+    const controller = new AbortController();
+    const loadPaperForEditing = async () => {
+      try {
+        const token = localStorage.getItem('arke_token');
+        const response = await fetch(`/api/paper/saved/${encodeURIComponent(paperId)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: 'include',
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        const data = await response.json();
+        if (!response.ok || !data.paper) throw new Error(data.error || 'Could not load this saved paper.');
+        if (controller.signal.aborted) return;
+        const paper = data.paper as SavedPaper;
+        setPaperQuestions(dedupeQuestions(paper.questions || []));
+        setActivePaperId(paper.id);
+        setActivePaperCreatedAt(paper.createdAt || null);
+        setExamTitle(paper.title || 'Untitled paper');
+        setInstituteName(paper.instituteName || 'ARKE SCHOLARS ACADEMY');
+        setTimeAllowed(paper.timeAllowed || '60 Mins');
+        setSelectedClass(paper.class_std || 'all');
+        setSelectedSubject(paper.subject || 'all');
+        setInstructions(paper.instructions || []);
+        setBuilderMode('edit');
+        setStudioTab('editor');
+      } catch (error) {
+        if (!controller.signal.aborted) showToast(error instanceof Error ? error.message : 'Could not load this saved paper.');
+      }
+    };
+    void loadPaperForEditing();
+    return () => controller.abort();
+  }, [paperId]);
 
   // Editing single question state via EditTaggingModal
   const [replacementIndex, setReplacementIndex] = useState<number | null>(null);
