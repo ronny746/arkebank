@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from 'crypto';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { delCache } from '@/lib/cache';
+import { getPublicExamUrl } from '@/lib/public-url';
 
 const admin = (req: Request) => extractAndVerifyToken(req);
 
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: 'The paper must contain at least one unique question.' }, { status: 400 });
   }
   const exam = {
-    id: randomUUID(), slug: randomBytes(9).toString('base64url'), title: body.title.trim(),
+    id: randomUUID(), slug: randomBytes(18).toString('base64url'), title: body.title.trim(),
     description: String(body.description || ''), paperId: body.paper.id || undefined,
     paper: { title: body.paper.title, class_std: body.paper.class_std, subject: body.paper.subject, timeAllowed: body.paper.timeAllowed, totalMarks: body.paper.totalMarks, instructions: body.paper.instructions || [] },
     questions: uniqueQuestions, status: body.status === 'draft' ? 'draft' : 'published',
@@ -61,12 +62,11 @@ export async function POST(req: Request) {
   const { db } = await connectToDatabase();
   await db.collection('exams').insertOne(exam);
   await delCache(`exam:public:${exam.slug}`);
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://bank.arkescholar.com').replace(/\/$/, '');
   return NextResponse.json({
     success: true,
     exam,
     publicUrl: `/e/${exam.slug}`,
-    liveUrl: `${baseUrl}/e/${exam.slug}`,
+    liveUrl: getPublicExamUrl(exam.slug),
     duplicatesRemoved: body.paper.questions.length - uniqueQuestions.length,
   }, { status: 201 });
 }
