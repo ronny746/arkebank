@@ -56,8 +56,12 @@ export default function PaperPrintableDocument({
     <div className={`paper-printable-root ${isSolutions ? 'mode-solutions' : 'mode-paper'} layout-${columnsMode}`}>
       {/* Watermark (for authentic official exam look) */}
       {metadata.showWatermark !== false && (
-        <div className="paper-watermark">
-          {metadata.watermarkText || 'ARKE SCHOLARS'}
+        <div className="paper-watermark-layer" aria-hidden="true">
+          {Array.from({ length: 9 }, (_, index) => (
+            <span className="paper-watermark" key={index}>
+              {metadata.watermarkText || 'ARKE SCHOLARS'}
+            </span>
+          ))}
         </div>
       )}
 

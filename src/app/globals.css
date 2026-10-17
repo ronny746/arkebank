@@ -4271,18 +4271,26 @@ body {
   line-height: 1.55;
 }
 
-.paper-watermark {
+.paper-watermark-layer {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) rotate(-35deg);
-  font-size: 5rem;
-  font-weight: 900;
-  color: rgba(0, 0, 0, 0.035);
+  inset: 30px 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  place-items: center;
+  overflow: hidden;
   pointer-events: none;
-  white-space: nowrap;
   user-select: none;
   z-index: 0;
+}
+
+.paper-watermark {
+  display: block;
+  transform: rotate(-32deg);
+  font-size: clamp(1.2rem, 2.2vw, 2.1rem);
+  font-weight: 900;
+  color: rgba(31, 50, 104, 0.07);
+  white-space: nowrap;
   letter-spacing: 0.12em;
 }
 
@@ -4293,6 +4301,9 @@ body {
   position: relative;
   z-index: 1;
 }
+
+.quick-answer-matrix,
+.paper-questions-flow { position: relative; z-index: 1; }
 
 .header-top-row {
   display: flex;
@@ -6155,6 +6166,65 @@ body {
 .reuse-summary-pill .stat-label, .reuse-summary-pill .stat-value { color: #047857; }
 .reuse-summary-pill.has-reuse { background: #fff7ed; border-color: #fed7aa; }
 .reuse-summary-pill.has-reuse .stat-label, .reuse-summary-pill.has-reuse .stat-value { color: #9a3412; }
+
+/* Full Studio keeps the print controls compact and makes every MCQ choice
+   read as a distinct faculty-review card. */
+.studio-focus-mode .paper-customization-toolbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px;
+}
+
+.studio-focus-mode .toolbar-setting-group {
+  min-width: 0;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.studio-focus-mode .setting-pill-buttons { max-width: 100%; overflow-x: auto; }
+.studio-focus-mode .btn-format-pill { white-space: nowrap; }
+.studio-focus-mode .options-grid { gap: 12px; margin-top: 18px; }
+
+.studio-focus-mode .option-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 76px;
+  padding: 14px 16px;
+  border: 1px solid #d7e0eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .03);
+}
+
+.studio-focus-mode .option-card:hover { border-color: #9db1cd; background: #fafcff; }
+.studio-focus-mode .option-card.option-correct { border-color: #7ed6aa; background: #ecfdf5; }
+.studio-focus-mode .option-letter {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e9eff7;
+  color: var(--primary-navy);
+  font-size: .82rem;
+  font-weight: 900;
+}
+.studio-focus-mode .letter-correct { background: #10b981; color: #fff; }
+.studio-focus-mode .option-body { min-width: 0; flex: 1; padding-top: 5px; color: #172554; font-size: .96rem; line-height: 1.5; }
+.studio-focus-mode .option-correct-badge { display: grid; place-items: center; flex: 0 0 22px; color: #059669; }
+
+@media (max-width: 1080px) { .studio-focus-mode .paper-customization-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .studio-focus-mode .paper-customization-toolbar { grid-template-columns: 1fr; } .studio-focus-mode .options-grid { grid-template-columns: 1fr; } }
 
 /* The final paper editor is a dedicated workspace, not a narrow portal pane.
    It intentionally covers the shell while retaining an explicit exit action. */
