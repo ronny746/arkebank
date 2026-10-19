@@ -17,7 +17,7 @@ Faculty navigation is route-backed through the portal shell, with a collapsible 
 ## Paper Studio flow
 
 1. **Blueprint:** teacher selects class, subject(s), title and institute.
-2. **Pick questions:** teacher chooses chapters, previews real question records, and adds individual, visible batch, or generated chapter questions without overwriting the draft. Chapters and subjects with no matching question records are not offered.
+2. **Pick questions:** teacher chooses chapters within a subject, sees only real question records and usable sub-topics, and adds individual, visible batch, or generated chapter questions without overwriting the draft. For multi-subject papers, each selected Subject → Chapter pair remains intact; selecting a second chapter automatically previews the combined scope, grouped by its own tagged sub-topics, without mixing chapters between subjects. Every selected-scope chip can be inspected or explicitly unselected; unselecting never silently removes questions already added to the paper. Chapters, sub-topics, and subjects with no matching question records are not offered.
 3. **Balance & build:** teacher selects count, duration, language, marks, filters and difficulty before generating the editable paper. If the teacher has manually picked questions, the target is locked to that exact selection; the system never pads it with unseen questions.
 
 The builder preserves its draft while moving between steps. "Open paper" enters the editing workspace only when at least one question is selected.

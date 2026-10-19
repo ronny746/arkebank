@@ -20,6 +20,13 @@ export async function ensureDatabaseIndexes(db: Db): Promise<void> {
     // 1. Questions collection
     await Promise.allSettled([
       qCol.createIndex({ id: 1, lang: 1 }, { background: true, name: 'idx_id_lang' }),
+      // Cursor feeds use (id, _id) as a stable continuation point. These indexes
+      // keep the bank and chapter picker from scanning/skipping prior batches.
+      qCol.createIndex({ id: 1, _id: 1 }, { background: true, name: 'idx_cursor_id_record' }),
+      qCol.createIndex(
+        { class_std: 1, subject: 1, topic: 1, lang: 1, id: 1, _id: 1 },
+        { background: true, name: 'idx_cursor_cls_sub_top_lang' },
+      ),
       qCol.createIndex({ subject: 1, topic: 1, lang: 1, difficulty: 1 }, { background: true, name: 'idx_sub_top_lang_diff' }),
       qCol.createIndex({ class_std: 1, subject: 1, topic: 1, difficulty: 1, lang: 1 }, { background: true, name: 'idx_cls_sub_top_diff_lang' }),
       qCol.createIndex({ subject: 1, lang: 1 }, { background: true, name: 'idx_sub_lang' }),

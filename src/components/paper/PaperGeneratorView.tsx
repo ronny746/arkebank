@@ -61,19 +61,6 @@ interface PaperGeneratorViewProps {
   paperId?: string;
 }
 
-const compactQuestionText = (value?: string, limit = 260) => {
-  const plain = String(value || '')
-    .replace(/<br\s*\/?\s*>/gi, ' ')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\$\$[\s\S]*?\$\$/g, ' [formula] ')
-    .replace(/\$[^$]+\$/g, ' [formula] ')
-    .replace(/\\\([\s\S]*?\\\)/g, ' [formula] ')
-    .replace(/&nbsp;|&amp;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return plain.length > limit ? `${plain.slice(0, limit).trim()}…` : plain;
-};
-
 const dedupeQuestions = (questions: QuestionItem[]) => {
   const seen = new Set<string>();
   return questions.filter((question) => {
@@ -88,6 +75,11 @@ type QuestionUsage = {
   paperId: string;
   title: string;
   updatedAt?: string;
+};
+
+type TopicScope = {
+  subject: string;
+  topic: string;
 };
 
 export default function PaperGeneratorView({
@@ -120,15 +112,20 @@ export default function PaperGeneratorView({
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [taxonomyLoading, setTaxonomyLoading] = useState<boolean>(true);
   const [taxonomyError, setTaxonomyError] = useState<string>('');
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [topicSelections, setTopicSelections] = useState<TopicScope[]>([]);
   const [chapterSearch, setChapterSearch] = useState<string>('');
   const [showAllTopics, setShowAllTopics] = useState(false);
   const [manualQuestionId, setManualQuestionId] = useState<string>('');
   const [addingQuestion, setAddingQuestion] = useState<boolean>(false);
   const [previewTopic, setPreviewTopic] = useState<string>('');
+  const [previewSelectedScope, setPreviewSelectedScope] = useState(false);
   const [topicPreviewQuestions, setTopicPreviewQuestions] = useState<QuestionItem[]>([]);
   const [checkedPreviewIds, setCheckedPreviewIds] = useState<string[]>([]);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [previewLoadingMore, setPreviewLoadingMore] = useState<boolean>(false);
+  const [previewNextCursor, setPreviewNextCursor] = useState<string | null>(null);
+  const [previewHasMore, setPreviewHasMore] = useState(false);
+  const previewRequestController = useRef<AbortController | null>(null);
   const topicScopeRef = useRef<string>('');
   const [totalQuestions, setTotalQuestions] = useState<number>(25);
   const [timeAllowed, setTimeAllowed] = useState<string>('60 Mins');
@@ -144,6 +141,23 @@ export default function PaperGeneratorView({
   const [availableQuestionTypes, setAvailableQuestionTypes] = useState<QuestionType[]>(['all']);
 
   const isMultiSubjectExam = ['NEET', 'JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass);
+  const selectedTopics = useMemo(
+    () => [...new Set(topicSelections.map((selection) => selection.topic))],
+    [topicSelections],
+  );
+  // A persisted/returned plan can have selected chapters without an active
+  // preview tab. Treat that state as a combined preview so the question pane
+  // never falls back to an empty instruction screen.
+  const isCombinedPreview = previewSelectedScope || (!previewTopic && topicSelections.length > 0);
+  const activePreviewScopes = useMemo(() => {
+    if (isCombinedPreview) return topicSelections;
+    return previewTopic ? [{ subject: pickerSubject, topic: previewTopic }] : [];
+  }, [isCombinedPreview, pickerSubject, previewTopic, topicSelections]);
+  const activePreviewScopeKey = useMemo(
+    () => activePreviewScopes.map((scope) => `${scope.subject}::${scope.topic}`).join('|'),
+    [activePreviewScopes],
+  );
+  const hasPreviewScope = activePreviewScopes.length > 0;
   const eligibleSubjects = useMemo(() => {
     if (selectedClass === 'NEET') return availableSubjects.filter(subject => ['Physics', 'Chemistry', 'Biology'].includes(subject));
     if (['JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass)) return availableSubjects.filter(subject => ['Physics', 'Chemistry', 'Mathematics'].includes(subject));
@@ -154,6 +168,14 @@ export default function PaperGeneratorView({
   const [easyPct, setEasyPct] = useState<number>(30);
   const [medPct, setMedPct] = useState<number>(50);
   const [hardPct, setHardPct] = useState<number>(20);
+  const difficultyTotal = easyPct + medPct + hardPct;
+  const difficultyIsValid = difficultyTotal === 100;
+  const updateDifficulty = (level: 'easy' | 'medium' | 'hard', rawValue: string) => {
+    const value = Math.min(100, Math.max(0, Number.parseInt(rawValue, 10) || 0));
+    if (level === 'easy') setEasyPct(value);
+    if (level === 'medium') setMedPct(value);
+    if (level === 'hard') setHardPct(value);
+  };
 
   // Active Questions in Paper
   const [paperQuestions, setPaperQuestions] = useState<QuestionItem[]>([]);
@@ -300,8 +322,9 @@ export default function PaperGeneratorView({
           if (scopeChanged) {
             // A class or language change creates a new blueprint. Switching the
             // subject tab must not silently throw away chapters picked earlier.
-            setSelectedTopics([]);
+            setTopicSelections([]);
             setPreviewTopic('');
+            setPreviewSelectedScope(false);
             setTopicPreviewQuestions([]);
           }
 
@@ -393,21 +416,74 @@ export default function PaperGeneratorView({
   };
 
   const handleToggleTopic = (topicName: string) => {
-    // A click always opens the chapter. Selection and removal are explicit
-    // actions in the question pane, so an inspection click never removes work.
-    setSelectedTopics((previous) => previous.includes(topicName) ? previous : [...previous, topicName]);
-    setPreviewTopic(topicName);
+    const exists = topicSelections.some((selection) => selection.subject === pickerSubject && selection.topic === topicName);
+    if (exists) {
+      setPreviewTopic(topicName);
+      setPreviewSelectedScope(false);
+      return;
+    }
+
+    const nextSelections = [...topicSelections, { subject: pickerSubject, topic: topicName }];
+    setTopicSelections(nextSelections);
+    // The first chapter opens directly. Every additional chapter switches to
+    // the combined scope so the teacher immediately reviews the real pool.
+    setPreviewSelectedScope(nextSelections.length > 1);
+    setPreviewTopic(nextSelections.length > 1 ? '' : topicName);
   };
 
-  const handleSelectAllTopics = () => setSelectedTopics([...availableTopics]);
-  const handleClearAllTopics = () => { setSelectedTopics([]); setPreviewTopic(''); setTopicPreviewQuestions([]); };
+  const handleInspectScope = (scope: TopicScope) => {
+    setPickerSubject(scope.subject);
+    setPreviewTopic(scope.topic);
+    setPreviewSelectedScope(false);
+  };
+
+  const handleUnselectTopic = (scope: TopicScope) => {
+    const nextSelections = topicSelections.filter((selection) => !(selection.subject === scope.subject && selection.topic === scope.topic));
+    setTopicSelections(nextSelections);
+
+    if (nextSelections.length > 1) {
+      setPreviewSelectedScope(true);
+      setPreviewTopic('');
+    } else if (nextSelections.length === 1) {
+      setPickerSubject(nextSelections[0].subject);
+      setPreviewTopic(nextSelections[0].topic);
+      setPreviewSelectedScope(false);
+    } else {
+      setPreviewTopic('');
+      setPreviewSelectedScope(false);
+      setTopicPreviewQuestions([]);
+    }
+    showToast(`${scope.topic} was removed from the selected scope. Questions already added to the paper remain unchanged.`);
+  };
+
+  const handleSelectAllTopics = () => {
+    const retained = topicSelections.filter((selection) => selection.subject !== pickerSubject);
+    const nextSelections = [...retained, ...availableTopics.map((topic) => ({ subject: pickerSubject, topic }))];
+    setTopicSelections(nextSelections);
+    setPreviewSelectedScope(nextSelections.length > 1);
+    setPreviewTopic(nextSelections.length > 1 ? '' : nextSelections[0]?.topic || '');
+  };
+  const handleClearAllTopics = () => {
+    setTopicSelections([]);
+    setPreviewTopic('');
+    setPreviewSelectedScope(false);
+    setTopicPreviewQuestions([]);
+  };
   const handleSelectSubject = (subject: string) => {
     if (!isMultiSubjectExam) { setSelectedSubject(subject); setSelectedSubjects([subject]); setPickerSubject(subject); return; }
     setSelectedSubjects(previous => {
-      const next = previous.includes(subject) ? previous.filter(item => item !== subject) : [...previous, subject];
+      const isRemoving = previous.includes(subject);
+      const next = isRemoving ? previous.filter(item => item !== subject) : [...previous, subject];
       const resolved = next.length ? next : [subject];
+      if (isRemoving) {
+        setTopicSelections((selections) => selections.filter((selection) => selection.subject !== subject));
+        if (pickerSubject === subject) {
+          setPreviewTopic('');
+          setPreviewSelectedScope(false);
+        }
+      }
       setSelectedSubject(resolved[0]);
-      setPickerSubject(subject);
+      setPickerSubject(isRemoving ? resolved[0] : subject);
       return resolved;
     });
   };
@@ -472,8 +548,11 @@ export default function PaperGeneratorView({
     setBuilderMode('configure');
     setBuilderStep(2);
     if (chapter) {
-      setSelectedTopics(previous => previous.includes(chapter) ? previous : [...previous, chapter]);
+      setTopicSelections((previous) => previous.some((selection) => selection.subject === (currentQuestion.subject || pickerSubject) && selection.topic === chapter)
+        ? previous
+        : [...previous, { subject: currentQuestion.subject || pickerSubject, topic: chapter }]);
       setPreviewTopic(chapter);
+      setPreviewSelectedScope(false);
     } else {
       setPreviewTopic('');
       setTopicPreviewQuestions([]);
@@ -493,9 +572,9 @@ export default function PaperGeneratorView({
         negative_marks: Number(question.negative_marks) || negativeMarks,
       }));
 
-    if (!additions.length) return showToast('All visible questions from this chapter are already in the paper.');
+    if (!additions.length) return showToast(`All visible questions from ${isCombinedPreview ? 'the selected scope' : 'this chapter'} are already in the paper.`);
     setPaperQuestions(previous => [...previous, ...additions]);
-    showToast(`${additions.length} questions from ${previewTopic} added. ${Math.max(0, totalQuestions - paperQuestions.length - additions.length)} slots remain.`);
+    showToast(`${additions.length} questions from ${isCombinedPreview ? 'the selected scope' : previewTopic} added. ${Math.max(0, totalQuestions - paperQuestions.length - additions.length)} slots remain.`);
   };
 
   const handleAddCheckedPreviewQuestions = () => {
@@ -513,7 +592,7 @@ export default function PaperGeneratorView({
   };
 
   const handleFillFromPreviewTopic = async () => {
-    if (!previewTopic) return;
+    if (!hasPreviewScope) return;
     const remaining = Math.max(1, totalQuestions - paperQuestions.length);
     setGenerating(true);
     try {
@@ -524,7 +603,9 @@ export default function PaperGeneratorView({
         method: 'POST', headers, credentials: 'include',
         body: JSON.stringify({
           class_std: selectedClass, subject: pickerSubject, subjects: selectedSubjects,
-          topics: [previewTopic], totalQuestions: remaining, lang: selectedLang,
+          topics: activePreviewScopes.map((scope) => scope.topic),
+          scopes: activePreviewScopes,
+          totalQuestions: remaining, lang: selectedLang,
           difficultyDistribution: { easy: easyPct, medium: medPct, hard: hardPct },
           hasImageOnly, pyqOnly, questionType, marksPerQuestion, negativeMarks,
         }),
@@ -535,55 +616,89 @@ export default function PaperGeneratorView({
       const additions = (data.questions || []).filter((question: QuestionItem) => !existingIds.has(String(question._id || question.id)));
       if (!additions.length) throw new Error('No new questions were found in this chapter.');
       setPaperQuestions(previous => [...previous, ...additions]);
-      showToast(`${additions.length} questions from ${previewTopic} added to the paper.`);
+      showToast(`${additions.length} questions from ${isCombinedPreview ? 'the selected chapters' : previewTopic} added to the paper.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Could not add questions from this chapter.');
     } finally { setGenerating(false); }
   };
 
   const handleRemovePreviewTopicQuestions = () => {
-    if (!previewTopic) return;
+    if (!hasPreviewScope) return;
     const before = paperQuestions.length;
-    const remainingQuestions = paperQuestions.filter(question => question.topic !== previewTopic);
+    const scopeKeys = new Set(activePreviewScopes.map((scope) => `${scope.subject}::${scope.topic}`));
+    const remainingQuestions = paperQuestions.filter((question) => !scopeKeys.has(`${question.subject || ''}::${question.topic || ''}`));
     const removed = before - remainingQuestions.length;
     if (removed) setPaperQuestions(remainingQuestions);
-    setSelectedTopics(previous => previous.filter(topic => topic !== previewTopic));
+    setTopicSelections((previous) => previous.filter((selection) => !scopeKeys.has(`${selection.subject}::${selection.topic}`)));
+    if (!isCombinedPreview) setPreviewTopic('');
     setCheckedPreviewIds([]);
-    showToast(removed ? `Removed ${removed} questions from ${previewTopic}.` : `${previewTopic} removed from the chapter plan.`);
+    showToast(removed ? `Removed ${removed} questions from the selected scope.` : 'Selected chapter scope removed from the paper plan.');
   };
 
   const previewTopicQuestionCount = useMemo(
-    () => previewTopic ? paperQuestions.filter(question => question.topic === previewTopic).length : 0,
-    [paperQuestions, previewTopic],
+    () => {
+      const scopeKeys = new Set(activePreviewScopes.map((scope) => `${scope.subject}::${scope.topic}`));
+      return paperQuestions.filter((question) => scopeKeys.has(`${question.subject || ''}::${question.topic || ''}`)).length;
+    },
+    [activePreviewScopes, paperQuestions],
   );
+
+  const loadTopicPreview = async (append = false) => {
+    if (!hasPreviewScope || (append && !previewNextCursor)) return;
+    previewRequestController.current?.abort();
+    const controller = new AbortController();
+    previewRequestController.current = controller;
+    if (append) setPreviewLoadingMore(true);
+    else setPreviewLoading(true);
+    try {
+      const token = localStorage.getItem('arke_token');
+      const queryParams: Record<string, string> = {
+        limit: '12', pagination: 'cursor', class_std: selectedClass, lang: selectedLang,
+      };
+      if (append && previewNextCursor) queryParams.cursor = previewNextCursor;
+      if (questionType !== 'all') queryParams.question_type = questionType;
+      const query = new URLSearchParams(queryParams);
+      activePreviewScopes.forEach((scope) => query.append('scope', `${scope.subject}::${scope.topic}`));
+      const response = await fetch(`/api/questions?${query}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      const incoming = data.questions || [];
+      setTopicPreviewQuestions((previous) => append ? dedupeQuestions([...previous, ...incoming]) : incoming);
+      setPreviewNextCursor(data.nextCursor || null);
+      setPreviewHasMore(Boolean(data.hasMore));
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (!append) setTopicPreviewQuestions([]);
+      showToast(error instanceof Error ? error.message : 'Could not load topic questions.');
+    } finally {
+      if (previewRequestController.current === controller) {
+        setPreviewLoading(false);
+        setPreviewLoadingMore(false);
+      }
+    }
+  };
 
   useEffect(() => {
     setCheckedPreviewIds([]);
-    if (!previewTopic) { setTopicPreviewQuestions([]); return; }
-    const loadPreview = async () => {
-      setPreviewLoading(true);
-      try {
-        const token = localStorage.getItem('arke_token');
-        const queryParams: Record<string, string> = { page: '1', limit: '12', class_std: selectedClass, topic: previewTopic, lang: selectedLang };
-        if (questionType !== 'all') queryParams.question_type = questionType;
-        const query = new URLSearchParams(queryParams);
-        if (!isMultiSubjectExam) query.set('subject', selectedSubject);
-        const response = await fetch(`/api/questions?${query}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include' });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        setTopicPreviewQuestions(data.questions || []);
-      } catch (error) {
-        setTopicPreviewQuestions([]);
-        showToast(error instanceof Error ? error.message : 'Could not load topic questions.');
-      } finally { setPreviewLoading(false); }
-    };
-    void loadPreview();
+    setPreviewNextCursor(null);
+    setPreviewHasMore(false);
+    if (!hasPreviewScope) { setTopicPreviewQuestions([]); return; }
+    void loadTopicPreview();
   // Topic selection is explicit; this fetch is intentionally scoped to its latest selection.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewTopic, selectedClass, selectedLang, selectedSubject, isMultiSubjectExam, questionType]);
+  }, [activePreviewScopeKey, isCombinedPreview, selectedClass, selectedLang, questionType]);
 
   // Generate Paper API Call
   const handleGeneratePaper = async () => {
+    if (!difficultyIsValid) {
+      showToast(`Difficulty split must total 100%. It is currently ${difficultyTotal}%.`);
+      return;
+    }
     const remaining = totalQuestions - paperQuestions.length;
     if (remaining <= 0) {
       setStudioTab('editor');
@@ -606,6 +721,7 @@ export default function PaperGeneratorView({
           subject: selectedSubject,
           subjects: selectedSubjects,
           topics: selectedTopics,
+          scopes: topicSelections,
           totalQuestions: remaining,
           difficultyDistribution: {
             easy: easyPct,
@@ -1186,21 +1302,52 @@ export default function PaperGeneratorView({
               <div className="topics-selection-box blueprint-step step-two">
                 <div className="topics-header-row">
                   <label className="field-label">
-                    Chapters in this paper plan ({selectedTopics.length})
+                    Selected chapter scope ({topicSelections.length})
                   </label>
+                  {topicSelections.length > 0 && (
+                    <div className="selected-scope-list selected-scope-inline" aria-label="Selected chapters">
+                      {topicSelections.map((scope) => (
+                        <div className="selected-scope-chip" key={`${scope.subject}::${scope.topic}`}>
+                          <button type="button" onClick={() => handleInspectScope(scope)} title={`Inspect ${scope.subject} · ${scope.topic}`}>
+                            <span>{scope.subject}</span>
+                            <strong>{scope.topic}</strong>
+                          </button>
+                          <button
+                            type="button"
+                            className="selected-scope-remove"
+                            onClick={() => handleUnselectTopic(scope)}
+                            aria-label={`Unselect ${scope.topic} from ${scope.subject}`}
+                            title={`Unselect ${scope.topic}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="topics-quick-actions">
                     <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">Select All</button>
                     <span className="dot-sep">•</span>
                     <button type="button" onClick={handleClearAllTopics} className="btn-text-action">Clear All</button>
+                    {topicSelections.length > 0 && <>
+                      <span className="dot-sep">•</span>
+                      <button
+                        type="button"
+                        onClick={() => { setPreviewSelectedScope(true); setPreviewTopic(''); }}
+                        className="btn-text-action scope-preview-trigger"
+                      >
+                        View selected questions ({topicSelections.length})
+                      </button>
+                    </>}
                   </div>
                 </div>
 
                 <div className="chapter-question-split">
                   <aside className="chapter-list-panel" aria-label="Chapter list">
                     <div className="picker-subject-tabs" aria-label="Subjects with available questions">
-                      {(isMultiSubjectExam ? selectedSubjects : [selectedSubject]).map((subject) => <button key={subject} type="button" className={pickerSubject === subject ? 'active' : ''} onClick={() => { setPickerSubject(subject); setPreviewTopic(''); setTopicPreviewQuestions([]); }}>{subject}</button>)}
+                      {(isMultiSubjectExam ? selectedSubjects : [selectedSubject]).map((subject) => <button key={subject} type="button" className={pickerSubject === subject && !isCombinedPreview ? 'active' : ''} onClick={() => { setPickerSubject(subject); setPreviewTopic(''); setPreviewSelectedScope(false); setTopicPreviewQuestions([]); }}>{subject}</button>)}
                     </div>
-                    <p className="chapter-list-hint">Click a chapter to inspect it. Add or remove its questions from the panel on the right.</p>
+                    <p className="chapter-list-hint">Choose a subject, then a chapter. Its real questions and available sub-topics open on the right.</p>
                 {/* Search Chapters */}
                 <div className="chapter-search-wrap">
                   <Search size={14} className="chapter-search-icon" />
@@ -1223,7 +1370,7 @@ export default function PaperGeneratorView({
                     <div className="no-topics-notice">No chapters matching &ldquo;{chapterSearch}&rdquo;</div>
                   ) : (
                     visibleTopics.map((top) => {
-                      const isChecked = selectedTopics.includes(top);
+                      const isChecked = topicSelections.some((selection) => selection.subject === pickerSubject && selection.topic === top);
                       return (
                         <button
                           key={top}
@@ -1243,26 +1390,15 @@ export default function PaperGeneratorView({
                   <section className="question-picker-pane" aria-label="Questions in selected chapter">
                 <div className="topic-preview-panel">
                   <div className="topic-preview-header">
-                    <div>
+                    <div className="question-filter-title">
                       <span>{replacementIndex !== null ? 'REPLACE QUESTION' : 'QUESTION PICKER'}</span>
-                      <div>
-                        <h4>{replacementIndex !== null ? `Choose a replacement for Question ${replacementIndex + 1}${previewTopic ? ` · ${previewTopic}` : ''}` : previewTopic ? `${previewTopic} questions` : 'Choose a chapter to inspect questions'}</h4>
-                        {previewTopic && (
-                          <div className="picker-type-filter-row">
-                            {QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id)).map((t) => (
-                              <button
-                                key={t.id}
-                                type="button"
-                                onClick={() => setQuestionType(t.id)}
-                                className={`picker-type-btn ${questionType === t.id ? 'active' : ''}`}
-                              >
-                                {t.shortLabel}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <h4>{replacementIndex !== null ? `Choose a replacement for Question ${replacementIndex + 1}${previewTopic ? ` · ${previewTopic}` : ''}` : isCombinedPreview ? `Questions from ${topicSelections.length} selected chapters` : previewTopic ? `${pickerSubject} · ${previewTopic}` : 'Choose a chapter to inspect questions'}</h4>
                     </div>
+                    {hasPreviewScope && <div className="picker-type-filter-row" aria-label="Question format filters">
+                      {QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id)).map((t) => (
+                        <button key={t.id} type="button" onClick={() => setQuestionType(t.id)} className={`picker-type-btn ${questionType === t.id ? 'active' : ''}`}>{t.shortLabel}</button>
+                      ))}
+                    </div>}
                     <div className="topic-preview-actions">
                       <div className="slots-inline-bar" title="Change target slots for this paper">
                         <span className="slots-inline-label">Target Slots:</span>
@@ -1311,14 +1447,28 @@ export default function PaperGeneratorView({
                         </div>
                       </div>
                       {replacementIndex === null && checkedPreviewIds.length > 0 && <button type="button" className="add-topic-preview" onClick={handleAddCheckedPreviewQuestions}>Add checked ({checkedPreviewIds.length})</button>}
-                      {replacementIndex === null && previewTopic && <button type="button" className="fill-topic-preview" onClick={() => void handleFillFromPreviewTopic()} disabled={generating || paperQuestions.length >= totalQuestions}>{generating ? 'Adding…' : `Add chapter · ${Math.max(0, totalQuestions - paperQuestions.length)} slots`}</button>}
-                      {replacementIndex === null && previewTopic && <button type="button" className="remove-topic-preview" onClick={handleRemovePreviewTopicQuestions}>Remove chapter{previewTopicQuestionCount ? ` (${previewTopicQuestionCount})` : ''}</button>}
+                      {replacementIndex === null && hasPreviewScope && <button type="button" className="fill-topic-preview" onClick={() => void handleFillFromPreviewTopic()} disabled={generating || paperQuestions.length >= totalQuestions}>{generating ? 'Adding…' : `${isCombinedPreview ? 'Fill selected scope' : 'Add chapter'} · ${Math.max(0, totalQuestions - paperQuestions.length)} slots`}</button>}
+                      {replacementIndex === null && hasPreviewScope && <button type="button" className="remove-topic-preview" onClick={handleRemovePreviewTopicQuestions}>Remove {isCombinedPreview ? 'selected scope' : 'chapter'}{previewTopicQuestionCount ? ` (${previewTopicQuestionCount})` : ''}</button>}
                       {replacementIndex !== null && <button type="button" className="fill-topic-preview" onClick={() => { setReplacementIndex(null); setBuilderMode('edit'); setStudioTab('editor'); }}>Cancel replace</button>}
-                      {previewTopic && replacementIndex === null && <button type="button" onClick={() => setPreviewTopic('')}>Close</button>}
+                      {hasPreviewScope && replacementIndex === null && <button type="button" onClick={() => { setPreviewTopic(''); setPreviewSelectedScope(false); }}>Close</button>}
                     </div>
                   </div>
-                  {previewTopic && replacementIndex === null && <p className="chapter-picker-help">Add chapter fills only the remaining paper slots. Remove chapter removes every question currently added from this chapter.</p>}
-                  {!previewTopic ? <div className="topic-picker-empty"><BookOpen size={22}/><b>{replacementIndex !== null ? 'Choose a chapter for the replacement' : 'Select a chapter to start'}</b><span>Click the + beside any chapter above. Its questions will appear here for review.</span></div> : previewLoading ? <div className="topic-picker-empty"><RefreshCw size={20} className="spin-icon"/><b>Loading chapter questions</b><span>Fetching the matching {selectedLang === 'hi' ? 'Hindi' : 'English'} records.</span></div> : topicPreviewQuestions.length === 0 ? <div className="topic-picker-empty"><Filter size={22}/><b>No questions found</b><span>Try another chapter or change the paper language.</span></div> : <div className="topic-preview-list">{topicPreviewQuestions.map((question, index) => { const questionKey = String(question._id || question.id); const isAdded = paperQuestions.some(item => String(item._id || item.id) === questionKey); const isChecked = checkedPreviewIds.includes(questionKey); return <article className="topic-preview-card" key={questionKey}><header><div><b>Question {index + 1}</b><span>#{question.id}</span></div><span className="topic-tier">{question.difficulty !== undefined && question.difficulty !== null ? `Tier ${question.difficulty}` : 'Tagged'}</span><label className="picker-check"><input type="checkbox" checked={isChecked} disabled={isAdded || replacementIndex !== null} onChange={() => setCheckedPreviewIds(previous => previous.includes(questionKey) ? previous.filter(id => id !== questionKey) : [...previous, questionKey])}/><span>Select</span></label></header><p className="topic-question-stem">{compactQuestionText(question.question)}</p><div className="topic-preview-meta"><span>{question.options?.length || 0} options</span>{question.question_image && <span>Diagram included</span>}<span>{question.subject || selectedSubject}</span></div><button type="button" onClick={() => handleAddPreviewQuestion(question)} disabled={isAdded}>{isAdded ? <><Check size={14}/> Already in paper</> : replacementIndex !== null ? <><RefreshCw size={14}/> Use as replacement</> : <><Plus size={14}/> Add this question</>}</button></article>; })}</div>}
+                  {!hasPreviewScope ? <div className="topic-picker-empty"><BookOpen size={22}/><b>{replacementIndex !== null ? 'Choose a chapter for the replacement' : 'Select a chapter to start'}</b><span>Choose a subject, then a chapter. Use “View selected questions” to inspect all selected chapters together.</span></div> : previewLoading ? <div className="topic-picker-empty"><RefreshCw size={20} className="spin-icon"/><b>Loading scope questions</b><span>Fetching the matching {selectedLang === 'hi' ? 'Hindi' : 'English'} records.</span></div> : topicPreviewQuestions.length === 0 ? <div className="topic-picker-empty"><Filter size={22}/><b>No questions found</b><span>Try another chapter, sub-topic or question format.</span></div> : <><div className="topic-preview-list">{topicPreviewQuestions.map((question, index) => {
+                    const questionKey = String(question._id || question.id);
+                    const isAdded = paperQuestions.some(item => String(item._id || item.id) === questionKey);
+                    const isChecked = checkedPreviewIds.includes(questionKey);
+                    return <article className="topic-preview-card" key={questionKey}>
+                      <header>
+                        <div><b>Question {index + 1}</b><span>#{question.id}</span></div>
+                        <span className="topic-tier">{question.difficulty !== undefined && question.difficulty !== null ? `Tier ${question.difficulty}` : 'Tagged'}</span>
+                        <label className="picker-check"><input type="checkbox" checked={isChecked} disabled={isAdded || replacementIndex !== null} onChange={() => setCheckedPreviewIds(previous => previous.includes(questionKey) ? previous.filter(id => id !== questionKey) : [...previous, questionKey])}/><span>Select</span></label>
+                      </header>
+                      <MathRenderer content={question.question} className="topic-question-stem" />
+                      {question.question_image && <img src={question.question_image} alt="Question diagram" className="topic-question-image" onClick={() => onImageZoom(question.question_image!, `Question ${question.id} diagram`)} />}
+                      <div className="topic-preview-meta">{question.question_image && <span>Diagram included</span>}<span>{question.subject || selectedSubject}</span>{question.topic && <span>{question.topic}</span>}{question.sub_topic && <span>{question.sub_topic}</span>}</div>
+                      <button type="button" onClick={() => handleAddPreviewQuestion(question)} disabled={isAdded}>{isAdded ? <><Check size={14}/> Already in paper</> : replacementIndex !== null ? <><RefreshCw size={14}/> Use as replacement</> : <><Plus size={14}/> Add this question</>}</button>
+                    </article>;
+                  })}</div>{previewHasMore && <div className="topic-preview-more"><button type="button" onClick={() => void loadTopicPreview(true)} disabled={previewLoadingMore}>{previewLoadingMore ? 'Loading next questions…' : 'Load 12 more questions'}</button><span>Only a small matching batch is loaded at a time.</span></div>}</>}
                 </div>
                   </section>
                 </div>
@@ -1469,8 +1619,35 @@ export default function PaperGeneratorView({
               <div className="difficulty-ratio-box">
                 <div className="ratio-header-row">
                   <span className="ratio-title">Difficulty Distribution</span>
-                  <span className="ratio-subtitle">
+                  <span className={`ratio-subtitle ${difficultyIsValid ? '' : 'ratio-total-invalid'}`} role="status">
                     Easy: {easyPct}% • Med: {medPct}% • Hard: {hardPct}%
+                  </span>
+                </div>
+
+                <div className="difficulty-inputs" aria-label="Set exact difficulty percentages">
+                  <p>Set the exact percentage for each level. Total must be 100%.</p>
+                  {([
+                    ['easy', 'Easy', easyPct],
+                    ['medium', 'Medium', medPct],
+                    ['hard', 'Hard', hardPct],
+                  ] as const).map(([level, label, value]) => (
+                    <label className={`difficulty-input difficulty-input-${level}`} key={level}>
+                      <span>{label}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        inputMode="numeric"
+                        value={value}
+                        onChange={(event) => updateDifficulty(level, event.target.value)}
+                        aria-invalid={!difficultyIsValid}
+                        aria-describedby="difficulty-total-help"
+                      />
+                      <b>%</b>
+                    </label>
+                  ))}
+                  <span id="difficulty-total-help" className={`difficulty-total ${difficultyIsValid ? 'is-valid' : 'is-invalid'}`}>
+                    Total: {difficultyTotal}%{difficultyIsValid ? ' — ready' : ' — adjust to 100%'}
                   </span>
                 </div>
 
@@ -1542,13 +1719,15 @@ export default function PaperGeneratorView({
                 <button
                   type="button"
                   onClick={handleGeneratePaper}
-                  disabled={generating}
+                  disabled={generating || !difficultyIsValid}
                   className="btn-huge-generate"
                 >
                   <Sparkles size={16} />
                   <span>
                     {generating
                       ? 'Generating from 5.27 Lakh Databank...'
+                      : !difficultyIsValid
+                      ? `Set difficulty total to 100% (${difficultyTotal}%)`
                       : paperQuestions.length > 0
                       ? `Open paper with ${paperQuestions.length} selected questions`
                       : `⚡ Generate ${totalQuestions} Questions Paper`}
@@ -1584,11 +1763,13 @@ export default function PaperGeneratorView({
                   type="button"
                   className="wizard-next-button wizard-generate-button"
                   onClick={() => void handleGeneratePaper()}
-                  disabled={generating}
+                  disabled={generating || !difficultyIsValid}
                 >
                   <Sparkles size={16} />
                   {generating
                     ? 'Building paper…'
+                    : !difficultyIsValid
+                    ? `Set difficulty total to 100% (${difficultyTotal}%)`
                     : paperQuestions.length >= totalQuestions
                     ? `Build Paper with ${paperQuestions.length} Selected Questions →`
                     : paperQuestions.length > 0

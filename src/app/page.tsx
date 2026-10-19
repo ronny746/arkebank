@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { 
@@ -78,8 +78,13 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
   const [questions, setQuestions] = useState<any[]>([]);
   const [totalQuestions, setTotalQuestions] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
+  const [questionCursor, setQuestionCursor] = useState<string | null>(null);
+  const [questionCursorHistory, setQuestionCursorHistory] = useState<(string | null)[]>([]);
+  const [nextQuestionCursor, setNextQuestionCursor] = useState<string | null>(null);
+  const [hasMoreQuestions, setHasMoreQuestions] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const questionRequestController = useRef<AbortController | null>(null);
 
   // Modals & Feedback
   const [zoomImage, setZoomImage] = useState<{ url: string; title?: string } | null>(null);
@@ -90,6 +95,22 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
   // Paper Generator navigation. Saved paper payloads stay in MongoDB.
   const [activeNavTab, setActiveNavTab] = useState<PortalView>(initialTab);
   const [navCollapsed, setNavCollapsed] = useState(false);
+
+  const questionFeedScope = [
+    selectedClass, selectedSubject, selectedTopic, selectedSubTopic,
+    selectedDifficulty, selectedYear, selectedLang,
+    hasImageOnly ? 'images' : 'all', searchQuery, limit,
+  ].join('|');
+
+  // A changed filter always begins a new cursor sequence. This prevents a
+  // cursor from one subject/topic being used against another query.
+  useEffect(() => {
+    setPage(1);
+    setQuestionCursor(null);
+    setQuestionCursorHistory([]);
+    setNextQuestionCursor(null);
+    setHasMoreQuestions(false);
+  }, [questionFeedScope]);
 
   const navigate = (view: PortalView) => {
     setActiveNavTab(view);
@@ -182,14 +203,20 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
   // Fetch Questions
   const fetchQuestions = useCallback(async () => {
     if (!user) return;
+    // A changed filter/cursor supersedes the previous response. Abort it so a
+    // slow request cannot consume bandwidth or overwrite the newest batch.
+    questionRequestController.current?.abort();
+    const controller = new AbortController();
+    questionRequestController.current = controller;
     setLoading(true);
     setError(null);
 
     try {
       const params = new URLSearchParams({
-        page: String(page),
         limit: String(limit),
+        pagination: 'cursor',
       });
+      if (questionCursor) params.set('cursor', questionCursor);
 
       if (selectedClass !== 'all') params.set('class_std', selectedClass);
       if (selectedSubject !== 'all') params.set('subject', selectedSubject);
@@ -208,7 +235,10 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
       const res = await fetch(`/api/questions?${params.toString()}`, {
         headers,
         credentials: 'include',
+        signal: controller.signal,
       });
+
+      if (controller.signal.aborted) return;
 
       if (res.status === 401) {
         handleLogout();
@@ -224,15 +254,18 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
       setQuestions(data.questions || []);
       setTotalQuestions(data.total || 0);
       setTotalPages(data.totalPages || 1);
+      setNextQuestionCursor(data.nextCursor || null);
+      setHasMoreQuestions(Boolean(data.hasMore));
     } catch (err: any) {
+      if (err?.name === 'AbortError') return;
       setError(err.message || 'Error connecting to database');
     } finally {
-      setLoading(false);
+      if (questionRequestController.current === controller) setLoading(false);
     }
   }, [
     user,
-    page,
     limit,
+    questionCursor,
     selectedClass,
     selectedSubject,
     selectedTopic,
@@ -252,6 +285,28 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
     e.preventDefault();
     setSearchQuery(searchInput);
     setPage(1);
+  };
+
+  const goToNextQuestionBatch = () => {
+    if (!nextQuestionCursor || loading) return;
+    setQuestionCursorHistory((previous) => [...previous, questionCursor]);
+    setQuestionCursor(nextQuestionCursor);
+    setPage((previous) => previous + 1);
+  };
+
+  const goToPreviousQuestionBatch = () => {
+    if (!questionCursorHistory.length || loading) return;
+    const previousCursor = questionCursorHistory[questionCursorHistory.length - 1] || null;
+    setQuestionCursorHistory((previous) => previous.slice(0, -1));
+    setQuestionCursor(previousCursor);
+    setPage((previous) => Math.max(1, previous - 1));
+  };
+
+  const goToFirstQuestionBatch = () => {
+    if (loading || page === 1) return;
+    setPage(1);
+    setQuestionCursor(null);
+    setQuestionCursorHistory([]);
   };
 
   const handleResetFilters = () => {
@@ -391,7 +446,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
         <section className="portal-workspace">
 
       {activeNavTab === 'dashboard' && <DashboardView questionCount={totalDbCount} onNavigate={navigate} />}
-      {activeNavTab !== 'dashboard' && activeNavTab !== 'exams' && <div className="workspace-context hide-print"><span>{activeNavTab === 'bank' ? 'Question bank' : activeNavTab === 'generator' ? 'Paper studio' : 'Saved papers'}</span></div>}
+      {activeNavTab !== 'dashboard' && activeNavTab !== 'exams' && activeNavTab !== 'generator' && <div className="workspace-context hide-print"><span>{activeNavTab === 'bank' ? 'Question bank' : 'Saved papers'}</span></div>}
 
       {/* Mobile Top Bar with Filter Drawer Button */}
       {activeNavTab === 'bank' && (
@@ -780,15 +835,15 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
                       }}
                       className="per-page-select"
                     >
-                      <option value={15}>15 / page</option>
-                      <option value={30}>30 / page</option>
-                      <option value={50}>50 / page</option>
+                      <option value={10}>10 / batch</option>
+                      <option value={15}>15 / batch</option>
+                      <option value={20}>20 / batch</option>
                     </select>
                   </div>
 
                   <div className="toolbar-page-nav">
                     <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      onClick={goToPreviousQuestionBatch}
                       disabled={page <= 1 || loading}
                       className="btn-toolbar-nav"
                     >
@@ -796,8 +851,8 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
                     </button>
                     <span className="toolbar-page-indicator">{page} / {totalPages || 1}</span>
                     <button
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages || loading}
+                      onClick={goToNextQuestionBatch}
+                      disabled={!hasMoreQuestions || loading}
                       className="btn-toolbar-nav"
                     >
                       <ChevronRight size={15} />
@@ -847,17 +902,17 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
               )}
 
               {/* Bottom Pagination */}
-              {totalPages > 1 && (
+              {(page > 1 || hasMoreQuestions) && (
                 <div className="pagination-bottom">
                   <button
-                    onClick={() => setPage(1)}
+                    onClick={goToFirstQuestionBatch}
                     disabled={page <= 1 || loading}
                     className="btn-page-text"
                   >
                     First
                   </button>
                   <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    onClick={goToPreviousQuestionBatch}
                     disabled={page <= 1 || loading}
                     className="btn-page-text"
                   >
@@ -866,23 +921,16 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
                   </button>
 
                   <span className="page-bottom-info">
-                    Page <b>{page}</b> of <b>{totalPages}</b>
+                    Batch <b>{page}</b> of <b>{totalPages}</b>
                   </span>
 
                   <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages || loading}
+                    onClick={goToNextQuestionBatch}
+                    disabled={!hasMoreQuestions || loading}
                     className="btn-page-text"
                   >
                     <span>Next</span>
                     <ChevronRight size={15} />
-                  </button>
-                  <button
-                    onClick={() => setPage(totalPages)}
-                    disabled={page >= totalPages || loading}
-                    className="btn-page-text"
-                  >
-                    Last ({totalPages})
                   </button>
                 </div>
               )}

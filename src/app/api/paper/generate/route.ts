@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       subject = 'all',
       subjects = [],
       topics = [],
+      scopes = [],
       totalQuestions = 25,
       difficultyDistribution = { easy: 30, medium: 50, hard: 20 },
       lang = 'all',
@@ -76,6 +77,17 @@ export async function POST(req: Request) {
       baseMatch.year = { $gt: 1990 };
     }
     Object.assign(baseMatch, withQuestionType(baseMatch, questionType));
+    const exactScopes = Array.isArray(scopes)
+      ? scopes.filter((scope: unknown): scope is { subject: string; topic: string } =>
+        Boolean(scope) && typeof (scope as { subject?: unknown }).subject === 'string' && typeof (scope as { topic?: unknown }).topic === 'string',
+      )
+      : [];
+    if (exactScopes.length) {
+      baseMatch.$and = [
+        ...(Array.isArray(baseMatch.$and) ? baseMatch.$and : []),
+        { $or: exactScopes.map((scope) => ({ subject: scope.subject, topic: scope.topic })) },
+      ];
+    }
 
     const { db } = await connectToDatabase();
     const questionsCol = db.collection('questions');
