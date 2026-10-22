@@ -48,6 +48,8 @@ export interface PaperMetadata {
   instituteName: string;
   class_std: string;
   subject: string;
+  /** Printed heading for the subject value, e.g. "Target Exam:" for NEET/JEE papers. */
+  subjectLabel?: string;
   timeAllowed: string;
   totalMarks: number;
   date?: string;

@@ -103,7 +103,7 @@ export default function PaperPrintableDocument({
             <span className="meta-val">{metadata.class_std || 'All Classes'}</span>
           </div>
           <div className="meta-col">
-            <span className="meta-label">Subject:</span>
+            <span className="meta-label">{metadata.subjectLabel || 'Subject:'}</span>
             <span className="meta-val">{metadata.subject || 'General'}</span>
           </div>
           <div className="meta-col">

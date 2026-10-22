@@ -31,9 +31,31 @@ export async function POST(req: Request) {
       questionType = 'all', // 'all' (mix) | 'mcq' | 'subjective' | 'numerical' | 'true_false'
       marksPerQuestion = 4,
       negativeMarks = 1,
+      assessmentTarget = 'school',
+      assessmentType = 'chapter',
+      competitiveExam = '',
+      enforceAssessmentRule = true,
     } = body;
 
-    const totalCount = Math.max(5, Math.min(180, parseInt(String(totalQuestions), 10) || 25));
+    const competitive = assessmentTarget === 'competitive';
+    const requestedSubjects = Array.isArray(subjects) && subjects.length
+      ? subjects.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim()))
+      : (subject && subject !== 'all' ? [subject] : []);
+    // A JEE Advanced combined paper is a PCM paper by definition. Enforce the
+    // same scope server-side so a stale client or crafted request cannot make
+    // an incomplete one-subject "Advanced" paper.
+    const subjectList = competitive && competitiveExam === 'JEE Advanced' && ['part', 'full'].includes(assessmentType)
+      ? ['Physics', 'Chemistry', 'Mathematics']
+      : requestedSubjects;
+    const selectedSubject = subjectList[0] || subject;
+    const derivedCount = (() => {
+      if (!competitive) return assessmentType === 'full' ? 50 : null;
+      if (assessmentType === 'full') return competitiveExam === 'NEET' ? 180 : competitiveExam === 'JEE Advanced' ? 54 : 75;
+      if (assessmentType === 'chapter') return competitiveExam === 'NEET' ? (selectedSubject === 'Biology' ? 90 : 45) : competitiveExam === 'JEE Advanced' ? 18 : 25;
+      if (competitiveExam === 'NEET') return subjectList.reduce((sum: number, item: string) => sum + (item === 'Biology' ? 90 : 45), 0);
+      return (competitiveExam === 'JEE Advanced' ? 18 : 25) * Math.max(1, subjectList.length);
+    })();
+    const totalCount = Math.max(1, Math.min(180, (enforceAssessmentRule ? derivedCount : null) || parseInt(String(totalQuestions), 10) || 25));
 
     // Calculate count per difficulty
     const easyPct = Number(difficultyDistribution?.easy) || 30;
@@ -56,8 +78,8 @@ export async function POST(req: Request) {
     if (class_std && class_std !== 'all') {
       baseMatch.class_std = class_std;
     }
-    if (Array.isArray(subjects) && subjects.length > 0) {
-      baseMatch.subject = { $in: subjects.filter((item: unknown) => typeof item === 'string' && item.trim()) };
+    if (subjectList.length > 0) {
+      baseMatch.subject = { $in: subjectList };
     } else if (subject && subject !== 'all') {
       baseMatch.subject = subject;
     }

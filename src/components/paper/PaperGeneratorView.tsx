@@ -82,6 +82,29 @@ type TopicScope = {
   topic: string;
 };
 
+type AssessmentTarget = 'school' | 'competitive';
+type AssessmentType = 'viva' | 'chapter' | 'part' | 'full';
+type CompetitiveExam = 'JEE Main' | 'JEE Advanced' | 'NEET';
+
+const EXAM_CLASS_VALUE: Record<CompetitiveExam, string> = {
+  'JEE Main': 'JM',
+  'JEE Advanced': 'JA',
+  NEET: 'NEET',
+};
+
+const COMPETITIVE_FORMATS: Record<CompetitiveExam, QuestionType[]> = {
+  'JEE Main': ['all', 'mcq', 'numerical'],
+  'JEE Advanced': ['all', 'mcq', 'numerical'],
+  NEET: ['all', 'mcq'],
+};
+
+const difficultyBand = (difficulty: QuestionItem['difficulty']) => {
+  const tier = Number(difficulty);
+  if (tier <= 1) return `Easy · Tier ${Number.isFinite(tier) ? tier : 0}`;
+  if (tier === 2) return 'Medium · Tier 2';
+  return `Hard · Tier ${Number.isFinite(tier) ? tier : 3}`;
+};
+
 export default function PaperGeneratorView({
   classesList,
   subjectsList,
@@ -96,6 +119,14 @@ export default function PaperGeneratorView({
   const [builderMode, setBuilderMode] = useState<'configure' | 'edit'>('configure');
   const [builderStep, setBuilderStep] = useState<1 | 2 | 3>(1);
   const [resetArmed, setResetArmed] = useState(false);
+
+  // A blueprint starts with the assessment rule, not a loose collection of
+  // fields. Competitive patterns lock their delivery rules; school tests keep
+  // the teacher in control where the school pattern permits it.
+  const [assessmentTarget, setAssessmentTarget] = useState<AssessmentTarget>('school');
+  const [selectedBoard, setSelectedBoard] = useState('CBSE');
+  const [assessmentType, setAssessmentType] = useState<AssessmentType>('chapter');
+  const [competitiveExam, setCompetitiveExam] = useState<CompetitiveExam>('JEE Main');
 
   // Paper Formatting Options
   const [optionFormat, setOptionFormat] = useState<'abcd' | '1234'>('abcd');
@@ -127,6 +158,7 @@ export default function PaperGeneratorView({
   const [previewHasMore, setPreviewHasMore] = useState(false);
   const previewRequestController = useRef<AbortController | null>(null);
   const topicScopeRef = useRef<string>('');
+  const multiSubjectPlanInitializedRef = useRef<string>('');
   const [totalQuestions, setTotalQuestions] = useState<number>(25);
   const [timeAllowed, setTimeAllowed] = useState<string>('60 Mins');
   const [examTitle, setExamTitle] = useState<string>('Comprehensive Assessment Test 2026');
@@ -140,7 +172,14 @@ export default function PaperGeneratorView({
   const [questionType, setQuestionType] = useState<QuestionType>('all');
   const [availableQuestionTypes, setAvailableQuestionTypes] = useState<QuestionType[]>(['all']);
 
-  const isMultiSubjectExam = ['NEET', 'JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass);
+  const isCompetitive = assessmentTarget === 'competitive';
+  // Combined Part tests and Full-syllabus papers can span multiple subjects.
+  // Competitive variants add official count/time rules on top of the same flow.
+  const isMultiSubjectExam = assessmentType === 'part' || assessmentType === 'full';
+  // JEE Advanced Part / Full papers always cover PCM. The faculty should not
+  // have to infer that from a generic multi-select control.
+  const isJeeAdvancedPcmPlan = isMultiSubjectExam && isCompetitive && competitiveExam === 'JEE Advanced';
+  const minimumSubjectsForPart = isJeeAdvancedPcmPlan ? 3 : 1;
   const selectedTopics = useMemo(
     () => [...new Set(topicSelections.map((selection) => selection.topic))],
     [topicSelections],
@@ -163,6 +202,110 @@ export default function PaperGeneratorView({
     if (['JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass)) return availableSubjects.filter(subject => ['Physics', 'Chemistry', 'Mathematics'].includes(subject));
     return availableSubjects;
   }, [selectedClass, availableSubjects]);
+
+  // Covers a page restored while a combined plan is already selected
+  // (including a hot refresh). Initialise it once per assessment/class/type;
+  // later teacher removals remain respected.
+  useEffect(() => {
+    if (!isMultiSubjectExam || eligibleSubjects.length < 2) return;
+    const planKey = `${assessmentTarget}|${competitiveExam}|${selectedClass}|${assessmentType}`;
+    if (multiSubjectPlanInitializedRef.current === planKey) return;
+    multiSubjectPlanInitializedRef.current = planKey;
+    if (selectedSubjects.length < 2) {
+      setSelectedSubjects(eligibleSubjects);
+      setSelectedSubject(eligibleSubjects[0]);
+      setPickerSubject(eligibleSubjects[0]);
+    }
+  }, [assessmentTarget, assessmentType, competitiveExam, eligibleSubjects, isMultiSubjectExam, selectedClass, selectedSubjects.length]);
+
+  const assessmentRule = useMemo(() => {
+    if (!isCompetitive) {
+      return {
+        locked: assessmentType === 'full',
+        duration: assessmentType === 'full' ? '180 Mins' : null,
+        count: assessmentType === 'full' ? 50 : null,
+        formats: assessmentType === 'viva' ? (['mcq'] as QuestionType[]) : null,
+        summary: assessmentType === 'viva'
+          ? 'Viva uses objective questions. You choose the time and question count.'
+          : assessmentType === 'full'
+            ? 'Full-syllabus board paper uses the school pattern and a minimum three-hour window.'
+            : 'You control duration, question count and chapter scope for this school assessment.',
+      };
+    }
+
+    const subjectCount = Math.max(1, selectedSubjects.length);
+    if (assessmentType === 'full') {
+      const fullCount = competitiveExam === 'NEET' ? 180 : competitiveExam === 'JEE Main' ? 75 : 54;
+      return { locked: true, duration: '180 Mins', count: fullCount, formats: COMPETITIVE_FORMATS[competitiveExam], summary: `${competitiveExam} full syllabus: 3 hours and the official pattern are fixed.` };
+    }
+    if (assessmentType === 'chapter') {
+      const chapterCount = competitiveExam === 'NEET'
+        ? (selectedSubject === 'Biology' ? 90 : 45)
+        : competitiveExam === 'JEE Advanced' ? 18 : 25;
+      return { locked: true, duration: '60 Mins', count: chapterCount, formats: COMPETITIVE_FORMATS[competitiveExam], summary: `${competitiveExam} chapter test rules are locked to the selected subject.` };
+    }
+    const minutes = competitiveExam === 'JEE Advanced'
+      ? 180
+      : subjectCount * 60;
+    const perSubject = competitiveExam === 'NEET'
+      ? selectedSubjects.reduce((sum, subject) => sum + (subject === 'Biology' ? 90 : 45), 0)
+      : competitiveExam === 'JEE Advanced' ? 18 * subjectCount : 25 * subjectCount;
+    return { locked: true, duration: `${minutes} Mins`, count: perSubject, formats: COMPETITIVE_FORMATS[competitiveExam], summary: competitiveExam === 'JEE Advanced' ? 'JEE Advanced Part test uses Physics, Chemistry and Mathematics together.' : `${competitiveExam} part test: ${subjectCount} selected subject${subjectCount === 1 ? '' : 's'} determine duration and count.` };
+  }, [assessmentType, competitiveExam, isCompetitive, selectedSubject, selectedSubjects]);
+
+  const patternOptions = useMemo(() => {
+    const formats = assessmentRule.formats;
+    if (formats) return QUESTION_TYPE_OPTIONS.filter((item) => formats.includes(item.id));
+    return QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id));
+  }, [assessmentRule.formats, availableQuestionTypes]);
+
+  useEffect(() => {
+    if (!assessmentRule.locked) return;
+    if (assessmentRule.duration) setTimeAllowed(assessmentRule.duration);
+    if (assessmentRule.count) setTotalQuestions(assessmentRule.count);
+    if (assessmentRule.formats && !assessmentRule.formats.includes(questionType)) setQuestionType('all');
+  }, [assessmentRule, questionType]);
+
+  const selectCompetitiveExam = (exam: CompetitiveExam) => {
+    setAssessmentTarget('competitive');
+    setCompetitiveExam(exam);
+    setSelectedClass(EXAM_CLASS_VALUE[exam]);
+    setSelectedSubjects([]);
+    setAvailableSubjects([]);
+    setAvailableTopics([]);
+    setPickerSubject('');
+    setTopicSelections([]);
+    setPreviewTopic('');
+    setTopicPreviewQuestions([]);
+  };
+
+  const selectSchoolTarget = () => {
+    setAssessmentTarget('school');
+    if (['NEET', 'JM', 'JA', 'JEE Main', 'JEE Advanced', 'Competitive Exam'].includes(selectedClass)) {
+      const fallbackClass = availableClasses.find((item) => !['NEET', 'JM', 'JA', 'JEE Main', 'JEE Advanced', 'Competitive Exam'].includes(item)) || classesList[0] || 'Class 12';
+      setSelectedClass(fallbackClass);
+      setSelectedSubjects([]);
+      setAvailableSubjects([]);
+      setAvailableTopics([]);
+      setPickerSubject('');
+      setTopicSelections([]);
+      setPreviewTopic('');
+      setTopicPreviewQuestions([]);
+    }
+  };
+
+  const selectAssessmentType = (type: AssessmentType) => {
+    setAssessmentType(type);
+    if (type !== 'part' && type !== 'full') return;
+
+    // Combined assessments begin with every usable subject for the selected
+    // class. The teacher can remove any non-required subject afterwards.
+    const combinedSubjects = eligibleSubjects.length ? eligibleSubjects : selectedSubjects;
+    if (!combinedSubjects.length) return;
+    setSelectedSubjects(combinedSubjects);
+    setSelectedSubject(combinedSubjects[0]);
+    setPickerSubject(combinedSubjects[0]);
+  };
 
   // Difficulty sliders (percentages)
   const [easyPct, setEasyPct] = useState<number>(30);
@@ -285,7 +428,7 @@ export default function PaperGeneratorView({
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
         const res = await fetch(
-          `/api/filters?class_std=${encodeURIComponent(selectedClass)}&subject=${encodeURIComponent(pickerSubject)}&lang=${selectedLang}&withQuestions=true`,
+          `/api/filters?class_std=${encodeURIComponent(selectedClass)}&subject=${encodeURIComponent(pickerSubject)}&lang=${selectedLang}&withQuestions=true${isCompetitive ? '&format_scope=assessment' : ''}`,
           { headers, credentials: 'include', signal: controller.signal }
         );
         if (!res.ok) throw new Error('Could not load available subjects and chapters.');
@@ -298,9 +441,21 @@ export default function PaperGeneratorView({
           }
           if (Array.isArray(data.subjects)) {
             setAvailableSubjects(data.subjects);
-            const eligible = data.subjects as string[];
+            const returnedSubjects = data.subjects as string[];
+            // The taxonomy response contains every subject that has questions.
+            // Preserve a teacher's multi-subject Part-test selection instead of
+            // reducing it to the minimum requirement whenever a subject tab
+            // refreshes. On first load, seed a Part test with every valid
+            // subject so the multi-select state is visible immediately.
+            const eligible = selectedClass === 'NEET'
+              ? returnedSubjects.filter((subject) => ['Physics', 'Chemistry', 'Biology'].includes(subject))
+              : ['JM', 'JA', 'JEE Main', 'JEE Advanced'].includes(selectedClass)
+                ? returnedSubjects.filter((subject) => ['Physics', 'Chemistry', 'Mathematics'].includes(subject))
+                : returnedSubjects;
             const retainedSubjects = selectedSubjects.filter((subject) => eligible.includes(subject));
-            const nextSubjects = retainedSubjects.length ? retainedSubjects : eligible.slice(0, isMultiSubjectExam ? eligible.length : 1);
+            const nextSubjects = isMultiSubjectExam
+              ? (isJeeAdvancedPcmPlan ? eligible : (retainedSubjects.length ? retainedSubjects : eligible))
+              : (retainedSubjects.length ? [retainedSubjects[0]] : eligible.slice(0, 1));
             if (nextSubjects.length) {
               if (nextSubjects.join('|') !== selectedSubjects.join('|')) setSelectedSubjects(nextSubjects);
               setSelectedSubject(nextSubjects[0]);
@@ -345,7 +500,7 @@ export default function PaperGeneratorView({
     }
     void fetchDynamicTopics();
     return () => controller.abort();
-  }, [pickerSubject, selectedClass, selectedLang, selectedSubjects, isMultiSubjectExam, questionType]);
+  }, [pickerSubject, selectedClass, selectedLang, selectedSubjects, isMultiSubjectExam, isCompetitive, isJeeAdvancedPcmPlan, minimumSubjectsForPart, questionType]);
 
   // Filtered topics based on search input
   const filteredTopics = useMemo(() => {
@@ -358,6 +513,8 @@ export default function PaperGeneratorView({
   // Apply Blueprint Presets
   const applyPreset = (preset: 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse') => {
     if (preset === 'balanced') {
+      setAssessmentTarget('school');
+      setAssessmentType('chapter');
       setTotalQuestions(25);
       setTimeAllowed('60 Mins');
       setMarksPerQuestion(4);
@@ -367,6 +524,8 @@ export default function PaperGeneratorView({
       setHardPct(20);
       setExamTitle(`${selectedSubject} Balanced Assessment`);
     } else if (preset === 'foundation') {
+      setAssessmentTarget('school');
+      setAssessmentType('chapter');
       setTotalQuestions(20);
       setTimeAllowed('45 Mins');
       setMarksPerQuestion(3);
@@ -376,6 +535,10 @@ export default function PaperGeneratorView({
       setHardPct(0);
       setExamTitle(`${selectedSubject} Foundation Concept Test`);
     } else if (preset === 'advanced') {
+      setAssessmentTarget('competitive');
+      setCompetitiveExam('JEE Advanced');
+      setSelectedClass(EXAM_CLASS_VALUE['JEE Advanced']);
+      setAssessmentType('chapter');
       setTotalQuestions(30);
       setTimeAllowed('90 Mins');
       setMarksPerQuestion(4);
@@ -385,6 +548,10 @@ export default function PaperGeneratorView({
       setHardPct(40);
       setExamTitle(`${selectedSubject} Advanced Ranker Test`);
     } else if (preset === 'jee_main') {
+      setAssessmentTarget('competitive');
+      setCompetitiveExam('JEE Main');
+      setSelectedClass(EXAM_CLASS_VALUE['JEE Main']);
+      setAssessmentType('chapter');
       setTotalQuestions(25);
       setTimeAllowed('60 Mins');
       setMarksPerQuestion(4);
@@ -394,6 +561,10 @@ export default function PaperGeneratorView({
       setHardPct(25);
       setExamTitle(`JEE Main Pattern Assessment - ${selectedSubject}`);
     } else if (preset === 'neet') {
+      setAssessmentTarget('competitive');
+      setCompetitiveExam('NEET');
+      setSelectedClass(EXAM_CLASS_VALUE.NEET);
+      setAssessmentType('chapter');
       setTotalQuestions(45);
       setTimeAllowed('45 Mins');
       setMarksPerQuestion(4);
@@ -403,6 +574,9 @@ export default function PaperGeneratorView({
       setHardPct(15);
       setExamTitle(`NEET Pattern Drill Mock - ${selectedSubject}`);
     } else if (preset === 'cbse') {
+      setAssessmentTarget('school');
+      setSelectedBoard('CBSE');
+      setAssessmentType('full');
       setTotalQuestions(35);
       setTimeAllowed('180 Mins');
       setMarksPerQuestion(3);
@@ -470,11 +644,32 @@ export default function PaperGeneratorView({
     setTopicPreviewQuestions([]);
   };
   const handleSelectSubject = (subject: string) => {
-    if (!isMultiSubjectExam) { setSelectedSubject(subject); setSelectedSubjects([subject]); setPickerSubject(subject); return; }
+    if (!isMultiSubjectExam) {
+      // Selecting a second subject is an intentional, common faculty action.
+      // Promote the blueprint to a Part test instead of silently replacing the
+      // first subject and making multi-subject papers feel unavailable.
+      if (selectedSubjects.length > 0 && !selectedSubjects.includes(subject)) {
+        const combinedSubjects = [...selectedSubjects, subject];
+        setAssessmentType('part');
+        setSelectedSubjects(combinedSubjects);
+        setSelectedSubject(combinedSubjects[0]);
+        setPickerSubject(subject);
+        showToast('Multi-subject Part test enabled. Both subjects are now included.');
+        return;
+      }
+      setSelectedSubject(subject);
+      setSelectedSubjects([subject]);
+      setPickerSubject(subject);
+      return;
+    }
+    if (selectedSubjects.includes(subject) && selectedSubjects.length <= minimumSubjectsForPart) {
+      showToast(`${competitiveExam} part tests need at least ${minimumSubjectsForPart} subjects.`);
+      return;
+    }
     setSelectedSubjects(previous => {
       const isRemoving = previous.includes(subject);
       const next = isRemoving ? previous.filter(item => item !== subject) : [...previous, subject];
-      const resolved = next.length ? next : [subject];
+      const resolved = next.length >= minimumSubjectsForPart ? next : previous;
       if (isRemoving) {
         setTopicSelections((selections) => selections.filter((selection) => selection.subject !== subject));
         if (pickerSubject === subject) {
@@ -608,6 +803,8 @@ export default function PaperGeneratorView({
           totalQuestions: remaining, lang: selectedLang,
           difficultyDistribution: { easy: easyPct, medium: medPct, hard: hardPct },
           hasImageOnly, pyqOnly, questionType, marksPerQuestion, negativeMarks,
+          assessmentTarget, assessmentType, competitiveExam,
+          enforceAssessmentRule: false,
         }),
       });
       const data = await response.json();
@@ -734,6 +931,9 @@ export default function PaperGeneratorView({
           questionType,
           marksPerQuestion,
           negativeMarks,
+          assessmentTarget,
+          assessmentType,
+          competitiveExam,
         }),
       });
 
@@ -1022,12 +1222,14 @@ export default function PaperGeneratorView({
     return Boolean((questionUsage[id] || questionUsage[String(question.id)] || []).length);
   }).length;
   const paperSubjectLabel = selectedSubjects.join(' + ');
+  const printableSubjectLabel = isCompetitive ? competitiveExam : paperSubjectLabel;
 
   const currentMetadata: PaperMetadata = {
     title: examTitle,
     instituteName,
     class_std: selectedClass,
-    subject: paperSubjectLabel,
+    subject: printableSubjectLabel,
+    subjectLabel: isCompetitive ? 'Target Exam:' : undefined,
     timeAllowed,
     totalMarks,
     instructions,
@@ -1180,66 +1382,112 @@ export default function PaperGeneratorView({
 
               <div className="form-fields-grid blueprint-step step-one">
                 <div className="form-field full-col">
-                  <label className="field-label">Target Class / Stream</label>
-                  <div className="pill-grid">
-                    {taxonomyLoading && availableClasses.length === 0 ? <span className="taxonomy-loading">Loading available classes…</span> : availableClasses.map((cls) => (
-                      <button
-                        key={cls}
-                        type="button"
-                        onClick={() => {
-                          setSelectedClass(cls);
-                          // Do not leave stale subjects from the previous
-                          // class visible while the content-backed list loads.
-                          setSelectedSubjects([]);
-                          setAvailableSubjects([]);
-                          setAvailableTopics([]);
-                          setPickerSubject('');
-                          setPreviewTopic('');
-                          setTopicPreviewQuestions([]);
-                        }}
-                        className={`pill-option ${selectedClass === cls ? 'active' : ''}`}
-                      >
-                        {cls}
+                  <label className="field-label">Assessment target</label>
+                  <div className="blueprint-route-switch" aria-label="Assessment target">
+                    <button type="button" className={assessmentTarget === 'school' ? 'active' : ''} onClick={selectSchoolTarget}>
+                      <GraduationCap size={16} /> School & boards
+                    </button>
+                    <button type="button" className={assessmentTarget === 'competitive' ? 'active' : ''} onClick={() => setAssessmentTarget('competitive')}>
+                      <Target size={16} /> Competitive exam
+                    </button>
+                  </div>
+                </div>
+
+                {assessmentTarget === 'school' ? <>
+                  <div className="form-field full-col">
+                    <label className="field-label">Board</label>
+                    <div className="pill-grid">
+                      {['CBSE', 'ICSE / ISC', 'State board'].map((board) => (
+                        <button key={board} type="button" onClick={() => setSelectedBoard(board)} className={`pill-option ${selectedBoard === board ? 'active' : ''}`}>{board}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="form-field full-col">
+                    <label className="field-label">Target class</label>
+                    <div className="pill-grid">
+                      {taxonomyLoading && availableClasses.length === 0 ? <span className="taxonomy-loading">Loading available classes…</span> : availableClasses.filter((cls) => !['NEET', 'JM', 'JA', 'JEE Main', 'JEE Advanced', 'Competitive Exam'].includes(cls)).map((cls) => (
+                        <button
+                          key={cls}
+                          type="button"
+                          onClick={() => {
+                            setSelectedClass(cls);
+                            setSelectedSubjects([]);
+                            setAvailableSubjects([]);
+                            setAvailableTopics([]);
+                            setPickerSubject('');
+                            setPreviewTopic('');
+                            setTopicPreviewQuestions([]);
+                          }}
+                          className={`pill-option ${selectedClass === cls ? 'active' : ''}`}
+                        >{cls}</button>
+                      ))}
+                    </div>
+                  </div>
+                </> : <div className="form-field full-col">
+                  <label className="field-label">Target exam</label>
+                  <div className="exam-target-grid">
+                    {(['JEE Main', 'JEE Advanced', 'NEET'] as CompetitiveExam[]).map((exam) => (
+                      <button key={exam} type="button" className={competitiveExam === exam ? 'active' : ''} onClick={() => selectCompetitiveExam(exam)}>
+                        <b>{exam}</b><span>{exam === 'NEET' ? 'Physics · Chemistry · Biology' : 'Physics · Chemistry · Mathematics'}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>}
+
+                <div className="form-field full-col">
+                  <label className="field-label">Test type</label>
+                  <div className="assessment-type-grid">
+                    {(assessmentTarget === 'school'
+                      ? ([['viva', 'Viva', 'Objective oral assessment'], ['chapter', 'Chapter test', 'One chapter or selected topics'], ['part', 'Part test', 'Multiple chapters or subjects'], ['full', 'Full syllabus', 'Whole course assessment']] as const)
+                      : ([['chapter', 'Chapter test', 'One subject + chapter'], ['part', 'Part test', 'One or more subjects'], ['full', 'Full syllabus', 'Official full-test pattern']] as const)
+                    ).map(([type, label, helper]) => (
+                      <button key={type} type="button" className={assessmentType === type ? 'active' : ''} onClick={() => selectAssessmentType(type)}>
+                        <b>{label}</b><span>{helper}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
+                <div className="blueprint-rule-note full-col" role="status">
+                  <ShieldCheck size={17} />
+                  <span><b>{isCompetitive ? `${competitiveExam} rules` : `${selectedBoard} pattern`}</b>{assessmentRule.summary}</span>
+                </div>
+
                 <div className="form-field full-col">
-                  <label className="field-label">{isMultiSubjectExam ? 'Subjects (select one or more)' : 'Subject'}</label>
-                  <div className="pill-grid">
-                    {taxonomyLoading ? <span className="taxonomy-loading">Checking subjects with questions…</span> : eligibleSubjects.map((sub) => (
-                      <button
-                        key={sub}
-                        type="button"
-                        onClick={() => handleSelectSubject(sub)}
-                        className={`pill-option ${selectedSubjects.includes(sub) ? 'active' : ''}`}
-                      >
-                        {sub}
-                      </button>
-                    ))}
+                  <div className="field-row-label">
+                    <label className="field-label">{isJeeAdvancedPcmPlan ? 'Subjects (PCM — all compulsory)' : 'Subjects (select one or more)'}</label>
+                    {!isJeeAdvancedPcmPlan && isMultiSubjectExam && <span>Click each subject you want to include</span>}
                   </div>
+                  <div className="pill-grid">
+                    {taxonomyLoading && eligibleSubjects.length === 0 ? <span className="subject-loading-skeleton" aria-label="Loading subjects with questions"><i /><i /><i /></span> : eligibleSubjects.map((sub) => (
+                      <button key={sub} type="button" onClick={() => handleSelectSubject(sub)} disabled={isJeeAdvancedPcmPlan && selectedSubjects.includes(sub)} title={isJeeAdvancedPcmPlan ? 'JEE Advanced Part tests always include Physics, Chemistry and Mathematics.' : undefined} className={`pill-option ${selectedSubjects.includes(sub) ? 'active' : ''}`}>{sub}</button>
+                    ))}
+                    {taxonomyLoading && eligibleSubjects.length > 0 && <span className="subjects-refreshing" role="status">Refreshing subjects…</span>}
+                  </div>
+                  {isMultiSubjectExam && selectedSubjects.length > 0 && (
+                    <div className="subject-plan-summary" role="status">
+                      <span className="subject-plan-label">{assessmentType === 'full' ? 'Full-syllabus plan' : 'Part-test plan'}</span>
+                      <div className="subject-plan-chips">
+                        {selectedSubjects.map((subject) => (
+                          <span key={subject} className="subject-plan-chip">
+                            {subject}
+                            {isCompetitive && <b>{competitiveExam === 'NEET' ? (subject === 'Biology' ? '90 Qs' : '45 Qs') : competitiveExam === 'JEE Advanced' ? '18 Qs' : '25 Qs'}</b>}
+                          </span>
+                        ))}
+                      </div>
+                      <strong>{isCompetitive || assessmentType === 'full' ? `${assessmentRule.count} questions · ${assessmentRule.duration}` : `${selectedSubjects.length} subjects · set slots below`}</strong>
+                    </div>
+                  )}
+                  {!isMultiSubjectExam && <p className="multi-subject-hint">For a combined paper, choose Part test or Full syllabus above; its subject pills support multiple selection.</p>}
                   {!taxonomyLoading && taxonomyError && <p className="taxonomy-inline-state" role="status">{taxonomyError}</p>}
                   {!taxonomyLoading && !taxonomyError && eligibleSubjects.length === 0 && <p className="taxonomy-inline-state" role="status">No subjects with questions are available for this class and language.</p>}
                 </div>
 
-                {/* Question Type / Pattern Selector */}
                 <div className="form-field full-col">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <label className="field-label" style={{ marginBottom: 0 }}>Question Pattern / Format (प्रश्न प्रकार)</label>
-                    <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>Select format or mix all</span>
-                  </div>
+                  <div className="field-row-label"><label className="field-label">Question pattern / format</label><span>Only formats valid for this assessment are shown</span></div>
                   <div className="pill-grid question-type-grid">
-                    {QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id)).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setQuestionType(item.id)}
-                        className={`pill-option ${questionType === item.id ? 'active' : ''}`}
-                        title={item.title}
-                      >
-                        {item.label}
-                      </button>
+                    {patternOptions.map((item) => (
+                      <button key={item.id} type="button" onClick={() => setQuestionType(item.id)} className={`pill-option ${questionType === item.id ? 'active' : ''}`} title={item.title}>{item.label}</button>
                     ))}
                   </div>
                 </div>
@@ -1269,14 +1517,15 @@ export default function PaperGeneratorView({
                 <div className="form-field full-col">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                     <label className="field-label" style={{ marginBottom: 0 }}>Target Paper Slots (कुल प्रश्न संख्या)</label>
-                    <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>Sets slots for chapter fill & paper size</span>
+                    <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>{assessmentRule.locked ? 'Set by assessment rules' : 'Sets slots for chapter fill & paper size'}</span>
                   </div>
-                  <div className="number-stepper-row">
+                  <div className={`number-stepper-row ${assessmentRule.locked ? 'is-rule-locked' : ''}`}>
                     {[10, 15, 20, 25, 30, 35, 40, 45, 50, 75].map((cnt) => (
                       <button
                         key={cnt}
                         type="button"
-                        onClick={() => setTotalQuestions(cnt)}
+                        onClick={() => !assessmentRule.locked && setTotalQuestions(cnt)}
+                        disabled={assessmentRule.locked}
                         className={`stepper-pill ${totalQuestions === cnt ? 'active' : ''}`}
                       >
                         {cnt} Qs
@@ -1290,6 +1539,7 @@ export default function PaperGeneratorView({
                         max={180}
                         value={totalQuestions}
                         onChange={(e) => setTotalQuestions(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        disabled={assessmentRule.locked}
                         className="custom-stepper-input"
                         title="Set target question slots"
                       />
@@ -1460,7 +1710,7 @@ export default function PaperGeneratorView({
                     return <article className="topic-preview-card" key={questionKey}>
                       <header>
                         <div><b>Question {index + 1}</b><span>#{question.id}</span></div>
-                        <span className="topic-tier">{question.difficulty !== undefined && question.difficulty !== null ? `Tier ${question.difficulty}` : 'Tagged'}</span>
+                        <span className="topic-tier">{question.difficulty !== undefined && question.difficulty !== null ? difficultyBand(question.difficulty) : 'Difficulty pending'}</span>
                         <label className="picker-check"><input type="checkbox" checked={isChecked} disabled={isAdded || replacementIndex !== null} onChange={() => setCheckedPreviewIds(previous => previous.includes(questionKey) ? previous.filter(id => id !== questionKey) : [...previous, questionKey])}/><span>Select</span></label>
                       </header>
                       <MathRenderer content={question.question} className="topic-question-stem" />
@@ -1494,6 +1744,11 @@ export default function PaperGeneratorView({
                       <b>{paperQuestions.length} questions selected</b>
                       <span>This paper will contain only the questions you picked. Go back to “Pick questions” to add or remove any question.</span>
                     </div>
+                  ) : assessmentRule.locked ? (
+                    <div className="manual-selection-lock rule-locked-summary" role="status">
+                      <b>{totalQuestions} questions set by {isCompetitive ? competitiveExam : selectedBoard}</b>
+                      <span>{assessmentRule.summary}</span>
+                    </div>
                   ) : (
                     <div className="number-stepper-row">
                       {[10, 15, 20, 25, 30, 45, 50, 75].map((cnt) => (
@@ -1524,13 +1779,27 @@ export default function PaperGeneratorView({
 
                 <div className="form-field">
                   <label className="field-label">Time Duration</label>
-                  <input
-                    type="text"
-                    value={timeAllowed}
-                    onChange={(e) => setTimeAllowed(e.target.value)}
-                    placeholder="e.g. 60 Mins or 3 Hours"
-                    className="wizard-input"
-                  />
+                  {assessmentRule.locked ? (
+                    <>
+                      <input type="text" value={timeAllowed} className="wizard-input" disabled aria-describedby="rule-duration-help" />
+                      <small id="rule-duration-help" className="rule-lock-help">Locked by the selected assessment pattern</small>
+                    </>
+                  ) : (
+                    <div className="time-slot-control">
+                      <div className="time-slot-grid" role="group" aria-label="Choose exam duration">
+                        {[
+                          ['60 Mins', '1 hour'],
+                          ['120 Mins', '2 hours'],
+                          ['180 Mins', '3 hours'],
+                        ].map(([value, label]) => (
+                          <button key={value} type="button" onClick={() => setTimeAllowed(value)} className={timeAllowed === value ? 'active' : ''}>{label}</button>
+                        ))}
+                      </div>
+                      <label className="custom-duration-field">Custom duration
+                        <input type="text" value={timeAllowed} onChange={(e) => setTimeAllowed(e.target.value)} placeholder="e.g. 45 Mins" className="wizard-input" />
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-field full-col">
@@ -1575,21 +1844,10 @@ export default function PaperGeneratorView({
                   />
                 </div>
 
-                {/* Question Type Pattern in Step 3 */}
-                <div className="form-field full-col">
-                  <label className="field-label">Question Pattern (प्रश्न प्रकार)</label>
-                  <div className="pill-grid question-type-grid">
-                    {QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id)).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setQuestionType(item.id)}
-                        className={`pill-option ${questionType === item.id ? 'active' : ''}`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
+                <div className="form-field full-col blueprint-readonly-summary" role="status">
+                  <span>Question pattern</span>
+                  <b>{QUESTION_TYPE_OPTIONS.find((item) => item.id === questionType)?.label || 'Mix All Types'}</b>
+                  <button type="button" onClick={() => setBuilderStep(1)}>Edit blueprint</button>
                 </div>
 
                 <div className="form-field full-col">

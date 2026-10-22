@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     const subject = searchParams.get('subject');
     const topic = searchParams.get('topic');
     const withQuestions = searchParams.get('withQuestions') === 'true';
+    const formatScope = searchParams.get('format_scope');
     const lang = searchParams.get('lang');
     const scopes = searchParams.getAll('scope')
       .map((value) => {
@@ -74,8 +75,11 @@ export async function GET(req: Request) {
       ).filter(Boolean).sort();
 
       // Show only formats that genuinely exist for the active class + subject.
+      // Pattern availability is assessment-level for competitive tests. A
+      // Mathematics numerical question must not disappear because the active
+      // chapter list happens to be showing another subject.
       const typeScope: Record<string, unknown> = { ...questionScope };
-      if (subject && subject !== 'all') typeScope.subject = subject;
+      if (formatScope !== 'assessment' && subject && subject !== 'all') typeScope.subject = subject;
       const typeCounts = await Promise.all(
         QUESTION_TYPE_OPTIONS.filter((item) => item.id !== 'all').map(async (item) => ({
           id: item.id,

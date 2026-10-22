@@ -3426,6 +3426,15 @@ body {
   grid-column: span 2;
 }
 
+/* Blueprint is a rule-selection surface: the first three controls answer
+   what is being assessed before the teacher starts choosing questions. */
+.blueprint-route-switch,.assessment-type-grid,.exam-target-grid{display:grid;gap:8px}.blueprint-route-switch{grid-template-columns:repeat(2,minmax(0,1fr))}.assessment-type-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.exam-target-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.blueprint-route-switch button,.assessment-type-grid button,.exam-target-grid button{min-height:48px;text-align:left;border:1px solid #D9E2EF;border-radius:10px;background:#fff;color:#475569;padding:10px 12px;font:700 .8rem var(--font-main);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}.blueprint-route-switch button{display:flex;align-items:center;justify-content:center;gap:8px}.assessment-type-grid button,.exam-target-grid button{display:grid;gap:3px}.assessment-type-grid button span,.exam-target-grid button span{font-size:.7rem;font-weight:600;line-height:1.25;color:#7A899D}.blueprint-route-switch button:hover,.assessment-type-grid button:hover,.exam-target-grid button:hover{border-color:#8FA7CB;background:#F8FAFC}.blueprint-route-switch button.active,.assessment-type-grid button.active,.exam-target-grid button.active{border-color:var(--primary-navy);background:#EEF3FF;color:var(--primary-navy);box-shadow:inset 0 0 0 1px var(--primary-navy)}.assessment-type-grid button.active span,.exam-target-grid button.active span{color:#49608A}.blueprint-rule-note{grid-column:span 2;display:flex;align-items:flex-start;gap:9px;border:1px solid #BDE8D0;background:#F1FBF5;border-radius:10px;padding:10px 12px;color:#176A42;font-size:.78rem;line-height:1.42}.blueprint-rule-note svg{flex:0 0 auto;margin-top:1px}.blueprint-rule-note b{display:block;margin-bottom:1px}.field-row-label{display:flex;align-items:center;justify-content:space-between;gap:12px}.field-row-label>span,.rule-lock-help{color:#64748B;font-size:.72rem;font-weight:600}.number-stepper-row.is-rule-locked{opacity:.72}.number-stepper-row.is-rule-locked button,.number-stepper-row.is-rule-locked input{cursor:not-allowed}.rule-locked-summary{border-left-color:#1D4ED8;background:#EFF6FF;color:#1E40AF}.rule-locked-summary b{color:#1E3A8A}
+.blueprint-readonly-summary{display:flex;align-items:center;gap:8px;border:1px solid #DCE6F4;border-radius:9px;background:#F8FAFC;padding:9px 11px;font-size:.78rem}.blueprint-readonly-summary span{color:#64748B;font-weight:700}.blueprint-readonly-summary b{color:#1E3A8A}.blueprint-readonly-summary button{margin-left:auto;border:0;background:transparent;color:#087A46;font:700 .74rem var(--font-main);cursor:pointer;text-decoration:underline}
+.subject-plan-summary{display:flex;align-items:center;flex-wrap:wrap;gap:8px;border:1px solid #CDEAD9;border-radius:10px;background:#F4FBF7;padding:9px 10px;color:#176A42;font-size:.76rem}.subject-plan-label{font-weight:800;text-transform:uppercase;letter-spacing:.08em;font-size:.66rem}.subject-plan-chips{display:flex;flex-wrap:wrap;gap:6px}.subject-plan-chip{display:inline-flex;gap:6px;align-items:center;border:1px solid #9DDFB9;border-radius:999px;background:#fff;padding:4px 8px;color:#176A42;font-weight:700}.subject-plan-chip b{color:#1E3A8A;font-size:.68rem}.subject-plan-summary>strong{margin-left:auto;color:#1E3A8A;font-size:.76rem}.time-slot-control{display:grid;gap:7px}.time-slot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.time-slot-grid button{border:1px solid #D9E2EF;border-radius:8px;background:#fff;color:#475569;padding:8px 6px;font:700 .74rem var(--font-main);cursor:pointer}.time-slot-grid button:hover{border-color:#8FA7CB;background:#F8FAFC}.time-slot-grid button.active{border-color:#1E3A8A;background:#EEF3FF;color:#1E3A8A;box-shadow:inset 0 0 0 1px #1E3A8A}.custom-duration-field{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:center;gap:8px;color:#64748B;font-size:.7rem;font-weight:700}.custom-duration-field .wizard-input{padding:7px 9px}
+.enable-multi-subject{border:0;background:transparent;color:#087A46;font:700 .76rem var(--font-main);cursor:pointer;text-decoration:underline;text-underline-offset:3px}.multi-subject-hint{margin:0;color:#64748B;font-size:.73rem;font-weight:600}
+.subject-loading-skeleton{display:flex;gap:7px;align-items:center;min-height:30px}.subject-loading-skeleton i{display:block;width:92px;height:29px;border-radius:7px;background:linear-gradient(90deg,#EEF2F7 20%,#F8FAFC 45%,#EEF2F7 70%);background-size:220% 100%;animation:subject-chip-shimmer 1.15s linear infinite}.subject-loading-skeleton i:nth-child(2){width:116px;animation-delay:.12s}.subject-loading-skeleton i:nth-child(3){width:82px;animation-delay:.24s}.subjects-refreshing{align-self:center;color:#64748B;font-size:.68rem;font-weight:700}.subjects-refreshing::before{content:'';display:inline-block;width:9px;height:9px;margin-right:5px;border:2px solid #B6C5D8;border-top-color:#087A46;border-radius:50%;vertical-align:-1px;animation:subject-spinner .65s linear infinite}@keyframes subject-chip-shimmer{to{background-position:-220% 0}}@keyframes subject-spinner{to{transform:rotate(360deg)}}
+@media (max-width:900px){.assessment-type-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.exam-target-grid{grid-template-columns:1fr}.blueprint-rule-note{grid-column:span 2}}@media (max-width:620px){.blueprint-route-switch,.assessment-type-grid{grid-template-columns:1fr}.blueprint-rule-note{grid-column:span 2}.field-row-label{align-items:flex-start;flex-direction:column;gap:3px}}
+
 .field-label {
   font-size: 0.8rem;
   font-weight: 700;
@@ -5960,9 +5969,49 @@ body {
   margin: 6px 0;
 }
 
+/* Question artwork arrives from several source systems with very different
+   intrinsic widths. The printable paper is the boundary: media must scale to
+   its text column instead of widening the paper or disappearing past its edge. */
+.paper-printable-root .paper-q-image-container,
+.paper-printable-root .paper-sol-image-container {
+  display: flex;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.paper-printable-root .paper-diagram-img {
+  display: block;
+  inline-size: min(100%, 680px) !important;
+  max-inline-size: 100% !important;
+  block-size: auto !important;
+  max-block-size: 360px !important;
+  box-sizing: border-box;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.paper-printable-root .option-img-wrap {
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+
+.paper-printable-root .paper-option-img {
+  display: block;
+  inline-size: min(100%, 160px);
+  max-inline-size: 100%;
+  block-size: auto;
+  object-fit: contain;
+}
+
 @media print {
   .paper-customization-toolbar {
     display: none !important;
+  }
+
+  .paper-printable-root .paper-diagram-img {
+    inline-size: min(100%, 170mm) !important;
+    max-block-size: 82mm !important;
   }
 
   .paper-questions-flow.cols-2-col {
