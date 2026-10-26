@@ -62,6 +62,10 @@ function renderMath(math: string, displayMode: boolean, fallback: string): strin
   }
 }
 
+function containsMatrix(math: string): boolean {
+  return /\\begin\{(?:array|matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|cases)\}/.test(math);
+}
+
 export default function MathRenderer({ content, className = '', inline = false }: MathRendererProps) {
   const renderedHtml = useMemo(() => {
     if (!content) return '';
@@ -78,7 +82,8 @@ export default function MathRenderer({ content, className = '', inline = false }
       .replace(/&amp;/gi, '&')
       .replace(/\\\\([a-zA-Z]+)/g, '\\$1')
       .replace(/\\\\;/g, '\\;')
-      .replace(/\\ /g, ' ');
+      // Preserve `\\\\ `: it is an array/matrix row separator followed by a space.
+      .replace(/(?<!\\)\\ /g, ' ');
 
     // Keep rendered fragments out of subsequent passes. Some legacy records contain
     // an array environment without $...$ delimiters, while newer records do use them.
@@ -100,11 +105,11 @@ export default function MathRenderer({ content, className = '', inline = false }
 
     // 2. Process explicitly-delimited inline math: $...$ or \(...\)
     text = text.replace(/\$([^\$\n\r]+?)\$/g, (_, math) =>
-      stash(renderMath(math, false, `$${math}$`)),
+      stash(renderMath(math, containsMatrix(math), `$${math}$`)),
     );
 
     text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) =>
-      stash(renderMath(math, false, `\\(${math}\\)`)),
+      stash(renderMath(math, containsMatrix(math), `\\(${math}\\)`)),
     );
 
     // 3. Older imported records sometimes store a complete matrix/determinant
