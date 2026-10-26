@@ -12,6 +12,7 @@ import PaperPrintableDocument from './PaperPrintableDocument';
 import AiPaperStudioView from './AiPaperStudioView';
 import ExamCreatorModal from '../exams/ExamCreatorModal';
 import { QUESTION_TYPE_OPTIONS, type QuestionType } from '@/lib/question-types';
+import type { TenantBrand } from '@/lib/tenant';
 import { 
   Sparkles, 
   Printer, 
@@ -60,6 +61,7 @@ interface PaperGeneratorViewProps {
   showToast: (msg: string) => void;
   onNavigateToBank: () => void;
   paperId?: string;
+  tenant: TenantBrand;
 }
 
 const dedupeQuestions = (questions: QuestionItem[]) => {
@@ -114,6 +116,7 @@ export default function PaperGeneratorView({
   showToast,
   onNavigateToBank,
   paperId,
+  tenant,
 }: PaperGeneratorViewProps) {
   const [studioSource, setStudioSource] = useState<'bank' | 'ai'>('bank');
   // Active Studio Tab: editor | preview (student paper) | solutions (teacher key)
@@ -165,7 +168,7 @@ export default function PaperGeneratorView({
   const [totalQuestions, setTotalQuestions] = useState<number>(25);
   const [timeAllowed, setTimeAllowed] = useState<string>('60 Mins');
   const [examTitle, setExamTitle] = useState<string>('Comprehensive Assessment Test 2026');
-  const [instituteName, setInstituteName] = useState<string>('ARKE SCHOLARS ACADEMY');
+  const [instituteName, setInstituteName] = useState<string>(tenant.paperInstituteName);
   const [marksPerQuestion, setMarksPerQuestion] = useState<number>(4);
   const [negativeMarks, setNegativeMarks] = useState<number>(1);
   const [selectedLang, setSelectedLang] = useState<'en' | 'hi'>('en');
@@ -376,7 +379,7 @@ export default function PaperGeneratorView({
         setActivePaperId(paper.id);
         setActivePaperCreatedAt(paper.createdAt || null);
         setExamTitle(paper.title || 'Untitled paper');
-        setInstituteName(paper.instituteName || 'ARKE SCHOLARS ACADEMY');
+        setInstituteName(paper.instituteName || tenant.paperInstituteName);
         setTimeAllowed(paper.timeAllowed || '60 Mins');
         setSelectedClass(paper.class_std || 'all');
         setSelectedSubject(paper.subject || 'all');
@@ -1177,6 +1180,16 @@ export default function PaperGeneratorView({
       optionFormat,
       columnsMode,
       optionsLayout,
+      brandName: tenant.portalName,
+      brandLogoSrc: tenant.logoSrc,
+      brandLogoWidth: tenant.logoWidth,
+      brandLogoHeight: tenant.logoHeight,
+      // The document identity belongs to the active portal. A teacher's
+      // optional institute name remains in the paper heading, but must not
+      // turn a Prepzo paper into an ARKE-branded/third-party watermark.
+      watermarkText: tenant.portalName,
+      showWatermark: true,
+      footerText: tenant.paperFooterText,
     };
 
     // Save to MongoDB. Paper data never falls back to browser storage.
@@ -1273,8 +1286,13 @@ export default function PaperGeneratorView({
     timeAllowed,
     totalMarks,
     instructions,
-    watermarkText: instituteName || 'ARKE SCHOLARS',
+    watermarkText: tenant.portalName,
     showWatermark: true,
+    brandName: tenant.portalName,
+    brandLogoSrc: tenant.logoSrc,
+    brandLogoWidth: tenant.logoWidth,
+    brandLogoHeight: tenant.logoHeight,
+    footerText: tenant.paperFooterText,
   };
 
   const studioSourceTabs = (
@@ -1292,7 +1310,7 @@ export default function PaperGeneratorView({
     return (
       <div className="paper-generator-wrapper ai-paper-generator-wrapper">
         {studioSourceTabs}
-        <AiPaperStudioView classesList={classesList} subjectsList={subjectsList} showToast={showToast} />
+        <AiPaperStudioView classesList={classesList} subjectsList={subjectsList} showToast={showToast} tenant={tenant} />
       </div>
     );
   }
@@ -1570,7 +1588,7 @@ export default function PaperGeneratorView({
                     type="text"
                     value={instituteName}
                     onChange={(e) => setInstituteName(e.target.value)}
-                    placeholder="e.g. ARKE SCHOLARS ACADEMY"
+                    placeholder={`e.g. ${tenant.paperInstituteName}`}
                     className="wizard-input"
                   />
                 </div>

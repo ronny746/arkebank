@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, LoaderCircle, Printer, RefreshCw, Save, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { PaperMetadata, QuestionItem } from '@/types/paper';
 import PaperPrintableDocument from './PaperPrintableDocument';
+import type { TenantBrand } from '@/lib/tenant';
 
 type QuestionFormat = 'mcq' | 'subjective' | 'numerical' | 'true_false';
 type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed';
@@ -12,6 +13,7 @@ interface AiPaperStudioViewProps {
   classesList: string[];
   subjectsList: string[];
   showToast: (message: string) => void;
+  tenant: TenantBrand;
 }
 
 const DEFAULT_SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'Science', 'English', 'Reasoning'];
@@ -25,7 +27,7 @@ const EXAM_SUBJECTS: Record<string, string[]> = {
 
 const splitTerms = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
 
-export default function AiPaperStudioView({ classesList, subjectsList, showToast }: AiPaperStudioViewProps) {
+export default function AiPaperStudioView({ classesList, subjectsList, showToast, tenant }: AiPaperStudioViewProps) {
   const classOptions = useMemo(() => Array.from(new Set([...DEFAULT_CLASSES, ...classesList])), [classesList]);
   const subjectOptions = useMemo(() => Array.from(new Set([...DEFAULT_SUBJECTS, ...subjectsList])), [subjectsList]);
   const schoolClassOptions = useMemo(() => {
@@ -139,7 +141,7 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
         body: JSON.stringify({
           id: `ai_paper_${Date.now()}`,
           title,
-          instituteName: 'ARKE SCHOLARS ACADEMY',
+          instituteName: tenant.paperInstituteName,
           class_std: classStd,
           subject: targetExam || subjects.join(' + '),
           timeAllowed: `${Math.max(10, count * 2)} Mins`,
@@ -150,6 +152,13 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
           source: 'ai',
           aiProvider: 'anthropic',
           createdAt: new Date().toISOString(),
+          brandName: tenant.portalName,
+          brandLogoSrc: tenant.logoSrc,
+          brandLogoWidth: tenant.logoWidth,
+          brandLogoHeight: tenant.logoHeight,
+          watermarkText: tenant.portalName,
+          showWatermark: true,
+          footerText: tenant.paperFooterText,
         }),
       });
       const data = await response.json();
@@ -164,15 +173,20 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
 
   const metadata: PaperMetadata = {
     title,
-    instituteName: 'ARKE SCHOLARS ACADEMY',
+    instituteName: tenant.paperInstituteName,
     class_std: classStd,
     subject: targetExam || subjects.join(' + '),
     subjectLabel: targetExam ? 'Target Exam:' : 'Subject:',
     timeAllowed: `${Math.max(10, questions.length * 2)} Mins`,
     totalMarks: questions.reduce((total, question) => total + (Number(question.marks) || marks), 0),
     instructions: ['All questions are compulsory.', `Each question carries ${marks} marks.`, 'AI-generated content has been reviewed by faculty.'],
-    watermarkText: 'ARKE SCHOLARS',
+    watermarkText: tenant.portalName,
     showWatermark: true,
+    brandName: tenant.portalName,
+    brandLogoSrc: tenant.logoSrc,
+    brandLogoWidth: tenant.logoWidth,
+    brandLogoHeight: tenant.logoHeight,
+    footerText: tenant.paperFooterText,
   };
 
   return (

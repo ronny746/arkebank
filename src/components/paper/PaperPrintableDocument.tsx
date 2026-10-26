@@ -47,6 +47,11 @@ export default function PaperPrintableDocument({
   // Compute stats
   const totalQuestions = printableQuestions.length;
   const totalMarks = printableQuestions.reduce((sum, q) => sum + (Number(q.marks) || 4), 0);
+  const brandName = metadata.brandName || 'ARKE SCHOLARS';
+  const brandLogoSrc = metadata.brandLogoSrc || '/logo.png';
+  const logoWidth = metadata.brandLogoWidth || 56;
+  const logoHeight = metadata.brandLogoHeight || 44;
+  const footerText = metadata.footerText || `${brandName} ASSESSMENT SYSTEM`;
 
   // Helper for option key display: A/B/C/D or 1/2/3/4
   const formatOptionKey = (key: string): string => {
@@ -69,7 +74,7 @@ export default function PaperPrintableDocument({
         <div className="paper-watermark-layer" aria-hidden="true">
           {Array.from({ length: 9 }, (_, index) => (
             <span className="paper-watermark" key={index}>
-              {metadata.watermarkText || 'ARKE SCHOLARS'}
+              {metadata.watermarkText || brandName}
             </span>
           ))}
         </div>
@@ -80,15 +85,15 @@ export default function PaperPrintableDocument({
         <div className="header-top-row">
           <div className="exam-logo-box">
             <Image
-              src="/logo.png"
-              alt="Logo"
-              width={56}
-              height={44}
+              src={brandLogoSrc}
+              alt={`${brandName} logo`}
+              width={logoWidth}
+              height={logoHeight}
               className="paper-header-logo"
             />
           </div>
           <div className="exam-titles-box">
-            <h1 className="exam-institute-name">{metadata.instituteName || 'ARKE SCHOLARS ACADEMY'}</h1>
+            <h1 className="exam-institute-name">{metadata.instituteName || brandName}</h1>
             <h2 className="exam-paper-title">{metadata.title || 'Comprehensive Assessment Examination'}</h2>
             {isSolutions && (
               <span className="exam-solutions-tag">TEACHER EVALUATION & DETAILED SOLUTIONS BOOKLET</span>
@@ -308,7 +313,7 @@ export default function PaperPrintableDocument({
       <div className="paper-exam-footer">
         <div className="footer-line"></div>
         <div className="footer-text">
-          <span>*** END OF EXAMINATION PAPER - ARKE SCHOLARS ASSESSMENT SYSTEM ***</span>
+          <span>*** END OF EXAMINATION PAPER - {footerText} ***</span>
         </div>
       </div>
     </div>

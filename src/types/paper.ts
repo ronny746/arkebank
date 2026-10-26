@@ -59,6 +59,11 @@ export interface PaperMetadata {
   instructions: string[];
   watermarkText?: string;
   showWatermark?: boolean;
+  brandName?: string;
+  brandLogoSrc?: string;
+  brandLogoWidth?: number;
+  brandLogoHeight?: number;
+  footerText?: string;
 }
 
 export interface PaperBlueprintConfig {
@@ -99,4 +104,9 @@ export interface SavedPaper {
   sections?: PaperSection[];
   watermarkText?: string;
   showWatermark?: boolean;
+  brandName?: string;
+  brandLogoSrc?: string;
+  brandLogoWidth?: number;
+  brandLogoHeight?: number;
+  footerText?: string;
 }

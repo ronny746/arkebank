@@ -371,7 +371,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
       {/* Global Header */}
       <header className="portal-header">
         <div className="header-left">
-          <div className="header-brand">
+          <div className={`header-brand ${tenant.logoIncludesWordmark ? 'header-brand-wordmark' : ''}`}>
             <Image
               src={tenant.logoSrc}
               alt={`${tenant.name} logo`}
@@ -380,10 +380,10 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
               className="brand-logo-img"
               priority
             />
-            <div className="brand-text-col">
+            {!tenant.logoIncludesWordmark && <div className="brand-text-col">
               <span className="brand-title">{tenant.portalName}</span>
               <span className="brand-subtitle">{tenant.subtitle}</span>
-            </div>
+            </div>}
           </div>
           <div className="live-db-pill" title="Live MongoDB production connection">
             <span className="live-dot"></span>
@@ -954,6 +954,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
           showToast={showToast}
           onNavigateToBank={() => navigate('bank')}
           paperId={paperId}
+          tenant={tenant}
         />
       )}
 
@@ -963,10 +964,11 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
           onLoadPaper={handleLoadSavedPaper}
           onNavigateToGenerator={() => navigate('generator')}
           showToast={showToast}
+          tenant={tenant}
         />
       )}
 
-      {activeNavTab === 'exams' && <ExamManagementView onBack={() => navigate('dashboard')} showToast={showToast} />}
+      {activeNavTab === 'exams' && <ExamManagementView onBack={() => navigate('dashboard')} onOpenPaperStudio={() => navigate('generator')} showToast={showToast} />}
 
         </section>
       </div>

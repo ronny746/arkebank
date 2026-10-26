@@ -14,17 +14,20 @@ import {
   X
 } from 'lucide-react';
 import ExamCreatorModal from '@/components/exams/ExamCreatorModal';
+import type { TenantBrand } from '@/lib/tenant';
 
 interface SavedPapersViewProps {
   onLoadPaper: (paper: SavedPaper) => void;
   onNavigateToGenerator: () => void;
   showToast: (msg: string) => void;
+  tenant: TenantBrand;
 }
 
 export default function SavedPapersView({
   onLoadPaper,
   onNavigateToGenerator,
   showToast,
+  tenant,
 }: SavedPapersViewProps) {
   const [papers, setPapers] = useState<SavedPaper[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -255,7 +258,7 @@ export default function SavedPapersView({
                 </div>
 
                 <h3 className="paper-card-title">{paper.title}</h3>
-                <div className="paper-institute-sub">{paper.instituteName || 'ARKE SCHOLARS'}</div>
+                <div className="paper-institute-sub">{paper.instituteName || tenant.paperInstituteName}</div>
 
                 <div className="paper-card-stats">
                   <div className="stat-item">

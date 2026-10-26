@@ -9,6 +9,9 @@ export type TenantBrand = {
   logoSrc: string;
   logoWidth: number;
   logoHeight: number;
+  logoIncludesWordmark?: boolean;
+  paperInstituteName: string;
+  paperFooterText: string;
 };
 
 const brands: Record<TenantId, TenantBrand> = {
@@ -21,6 +24,8 @@ const brands: Record<TenantId, TenantBrand> = {
     logoSrc: '/logo.png',
     logoWidth: 65,
     logoHeight: 50,
+    paperInstituteName: 'ARKE SCHOLARS ACADEMY',
+    paperFooterText: 'ARKE SCHOLARS ASSESSMENT SYSTEM',
   },
   prepzo: {
     id: 'prepzo',
@@ -31,6 +36,9 @@ const brands: Record<TenantId, TenantBrand> = {
     logoSrc: '/prepzo-logo-horizontal.png',
     logoWidth: 142,
     logoHeight: 43,
+    logoIncludesWordmark: true,
+    paperInstituteName: 'Prepzo',
+    paperFooterText: 'PREPZO ASSESSMENT SYSTEM',
   },
 };
 
