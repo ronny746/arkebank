@@ -146,6 +146,7 @@ export default function PaperGeneratorView({
   const [taxonomyLoading, setTaxonomyLoading] = useState<boolean>(true);
   const [taxonomyError, setTaxonomyError] = useState<string>('');
   const [topicSelections, setTopicSelections] = useState<TopicScope[]>([]);
+  const [selectingFullSyllabus, setSelectingFullSyllabus] = useState(false);
   const [chapterSearch, setChapterSearch] = useState<string>('');
   const [showAllTopics, setShowAllTopics] = useState(false);
   const [manualQuestionId, setManualQuestionId] = useState<string>('');
@@ -309,7 +310,8 @@ export default function PaperGeneratorView({
     setPickerSubject(combinedSubjects[0]);
   };
 
-  // Difficulty sliders (percentages)
+  // Exact percentage inputs are the source of truth. A 100% hard blueprint
+  // must stay hard end-to-end; no slider is allowed to silently rebalance it.
   const [easyPct, setEasyPct] = useState<number>(30);
   const [medPct, setMedPct] = useState<number>(50);
   const [hardPct, setHardPct] = useState<number>(20);
@@ -642,6 +644,33 @@ export default function PaperGeneratorView({
     setTopicSelections(nextSelections);
     setPreviewSelectedScope(nextSelections.length > 1);
     setPreviewTopic(nextSelections.length > 1 ? '' : nextSelections[0]?.topic || '');
+  };
+  const handleSelectFullSyllabus = async () => {
+    if (!selectedSubjects.length) return showToast('Choose at least one subject first.');
+    setSelectingFullSyllabus(true);
+    try {
+      const token = localStorage.getItem('arke_token');
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const responses = await Promise.all(selectedSubjects.map(async (subject) => {
+        const query = new URLSearchParams({ class_std: selectedClass, subject, lang: selectedLang, withQuestions: 'true' });
+        if (isCompetitive) query.set('format_scope', 'assessment');
+        const response = await fetch(`/api/filters?${query.toString()}`, { headers, credentials: 'include' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `Could not load chapters for ${subject}.`);
+        return { subject, topics: Array.isArray(data.topics) ? data.topics as string[] : [] };
+      }));
+      const fullScope = responses.flatMap(({ subject, topics }) => topics.map((topic) => ({ subject, topic })));
+      if (!fullScope.length) throw new Error('No chapters with questions are available for the selected full-syllabus plan.');
+      setTopicSelections(fullScope);
+      setPreviewTopic('');
+      setPreviewSelectedScope(true);
+      setPickerSubject(fullScope[0].subject);
+      showToast(`Full syllabus selected: ${fullScope.length} chapters with available questions across ${selectedSubjects.length} subject${selectedSubjects.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not select the full syllabus.');
+    } finally {
+      setSelectingFullSyllabus(false);
+    }
   };
   const handleClearAllTopics = () => {
     setTopicSelections([]);
@@ -1603,7 +1632,8 @@ export default function PaperGeneratorView({
                     </div>
                   )}
                   <div className="topics-quick-actions">
-                    <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">Select All</button>
+                    {assessmentType === 'full' && <><button type="button" onClick={() => void handleSelectFullSyllabus()} className="btn-text-action" disabled={selectingFullSyllabus}>{selectingFullSyllabus ? 'Selecting full syllabus…' : 'Select full syllabus'}</button><span className="dot-sep">•</span></>}
+                    <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">Select all {pickerSubject || 'chapters'}</button>
                     <span className="dot-sep">•</span>
                     <button type="button" onClick={handleClearAllTopics} className="btn-text-action">Clear All</button>
                     {topicSelections.length > 0 && <>
@@ -1910,11 +1940,11 @@ export default function PaperGeneratorView({
                 </div>
 
                 <div className="difficulty-inputs" aria-label="Set exact difficulty percentages">
-                  <p>Set the exact percentage for each level. Total must be 100%.</p>
+                  <p>Set exact levels for generation. The generator never substitutes another level: 100% Hard returns Tier 3 questions only.</p>
                   {([
                     ['easy', 'Easy', easyPct],
                     ['medium', 'Medium', medPct],
-                    ['hard', 'Hard', hardPct],
+                    ['hard', 'Hard (Tier 3)', hardPct],
                   ] as const).map(([level, label, value]) => (
                     <label className={`difficulty-input difficulty-input-${level}`} key={level}>
                       <span>{label}</span>
@@ -1942,61 +1972,6 @@ export default function PaperGeneratorView({
                   <div className="bar-seg seg-hard" style={{ width: `${hardPct}%` }}>Hard {hardPct}%</div>
                 </div>
 
-                <div className="ratio-sliders-row">
-                  <div className="slider-item">
-                    <span className="slider-label">Easy ({easyPct}%)</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={easyPct}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        setEasyPct(val);
-                        const rem = 100 - val;
-                        setMedPct(Math.round(rem * 0.7));
-                        setHardPct(rem - Math.round(rem * 0.7));
-                      }}
-                      className="range-input slider-easy"
-                    />
-                  </div>
-
-                  <div className="slider-item">
-                    <span className="slider-label">Medium ({medPct}%)</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={medPct}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        const rem = 100 - val;
-                        setMedPct(val);
-                        setEasyPct(Math.round(rem * 0.6));
-                        setHardPct(rem - Math.round(rem * 0.6));
-                      }}
-                      className="range-input slider-med"
-                    />
-                  </div>
-
-                  <div className="slider-item">
-                    <span className="slider-label">Hard ({hardPct}%)</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={hardPct}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        const rem = 100 - val;
-                        setHardPct(val);
-                        setEasyPct(Math.round(rem * 0.4));
-                        setMedPct(rem - Math.round(rem * 0.4));
-                      }}
-                      className="range-input slider-hard"
-                    />
-                  </div>
-                </div>
               </div>
 
               {/* Generate Button */}

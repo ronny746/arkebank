@@ -58,19 +58,28 @@ export async function POST(req: Request) {
     const totalCount = Math.max(1, Math.min(180, (enforceAssessmentRule ? derivedCount : null) || parseInt(String(totalQuestions), 10) || 25));
 
     // Calculate count per difficulty
-    const easyPct = Number(difficultyDistribution?.easy) || 30;
-    const medPct = Number(difficultyDistribution?.medium) || 50;
-    const hardPct = Number(difficultyDistribution?.hard) || 20;
-    const sumPct = easyPct + medPct + hardPct || 100;
-
-    let easyTarget = Math.round((easyPct / sumPct) * totalCount);
-    let hardTarget = Math.round((hardPct / sumPct) * totalCount);
-    let medTarget = totalCount - easyTarget - hardTarget;
-    if (medTarget < 0) {
-      medTarget = 0;
-      easyTarget = Math.floor(totalCount / 2);
-      hardTarget = totalCount - easyTarget;
+    const percentage = (value: unknown, fallback: number) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? Math.floor(parsed) : fallback;
+    };
+    // Do not use `value || fallback` here: 0% is an intentional selection.
+    const easyPct = percentage(difficultyDistribution?.easy, 30);
+    const medPct = percentage(difficultyDistribution?.medium, 50);
+    const hardPct = percentage(difficultyDistribution?.hard, 20);
+    const sumPct = easyPct + medPct + hardPct;
+    if (sumPct !== 100) {
+      return NextResponse.json({ success: false, error: `Difficulty split must total exactly 100% (received ${sumPct}%).` }, { status: 400 });
     }
+    const allocateTargets = (count: number, ratios: number[]) => {
+      const exact = ratios.map((ratio) => (count * ratio) / 100);
+      const targets = exact.map(Math.floor);
+      let remaining = count - targets.reduce((sum, target) => sum + target, 0);
+      [...exact.keys()].sort((a, b) => (exact[b] - Math.floor(exact[b])) - (exact[a] - Math.floor(exact[a]))).forEach((index) => {
+        if (remaining > 0) { targets[index] += 1; remaining -= 1; }
+      });
+      return targets;
+    };
+    const [easyTarget, medTarget, hardTarget] = allocateTargets(totalCount, [easyPct, medPct, hardPct]);
 
     // Build base filter
     const baseMatch: Record<string, any> = {};
@@ -157,9 +166,9 @@ export async function POST(req: Request) {
       });
     }
 
-    // 3. Hard Questions (Tier 3 & 4)
+    // 3. Hard Questions (Tier 3 only). Tier 4 is Expert, not Hard.
     if (hardTarget > 0) {
-      const hardDocs = await sampleTier({ $in: ['3', '4', 3, 4] }, hardTarget, Array.from(collectedIds));
+      const hardDocs = await sampleTier({ $in: ['3', 3] }, hardTarget, Array.from(collectedIds));
       hardDocs.forEach((doc) => {
         const idStr = String(doc._id || doc.id);
         if (!collectedIds.has(idStr)) {
@@ -169,27 +178,16 @@ export async function POST(req: Request) {
       });
     }
 
-    // 4. Backfill if any tier lacked enough questions to hit totalCount
+    // Never backfill a missing difficulty with another level. A 100% Hard
+    // request must never contain easy/medium records merely to hit the count.
     const deficit = totalCount - allQuestions.length;
     if (deficit > 0) {
-      const backfillMatch = { ...baseMatch };
-      if (collectedIds.size > 0) {
-        backfillMatch._id = { $nin: Array.from(collectedIds) };
-      }
-      const backfillDocs = await questionsCol
-        .aggregate([
-          { $match: backfillMatch },
-          { $sample: { size: deficit } },
-        ])
-        .toArray();
-
-      backfillDocs.forEach((doc) => {
-        const idStr = String(doc._id || doc.id);
-        if (!collectedIds.has(idStr)) {
-          collectedIds.add(idStr);
-          allQuestions.push(doc);
-        }
-      });
+      return NextResponse.json({
+        success: false,
+        error: `Only ${allQuestions.length} of ${totalCount} questions match the requested difficulty distribution. Change the split, scope, or filters; no mixed-difficulty backfill was used.`,
+        available: allQuestions.length,
+        requested: totalCount,
+      }, { status: 422 });
     }
 
     // Format questions with default marks and numbering
