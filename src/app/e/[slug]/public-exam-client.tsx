@@ -34,6 +34,11 @@ type StudentResult = {
 };
 const time = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
+function AnswerValue({ option, fallback }: { option?: { key: string; text?: string; image?: string }; fallback: string }) {
+  if (!option) return <b className="student-answer-value">{fallback}</b>;
+  return <div className="student-answer-value"><b>{option.key.toUpperCase()}.</b>{option.text ? <MathRenderer content={option.text}/> : null}{option.image ? <img src={option.image} alt="Answer option"/> : null}</div>;
+}
+
 function StudentResultAnalysis({ result }: { result: StudentResult }) {
   const outcomeCopy: Record<ResponseReview['outcome'], string> = { correct: 'Correct', wrong: 'Incorrect', unattempted: 'Not attempted', manual_review: 'Manual review' };
   return <div className="student-result-analysis">
@@ -41,7 +46,7 @@ function StudentResultAnalysis({ result }: { result: StudentResult }) {
       <div className="student-result-mark"><Trophy size={22}/><b>{result.score}</b><span>out of {result.maxScore} marks</span></div>
       <div className="student-result-metrics">
         <span><b>{result.percentage}%</b>Score</span>
-        <span><b>{result.rank || '—'}{result.totalRanked ? ` / ${result.totalRanked}` : ''}</b>Rank</span>
+        <span><b>#{result.rank || '—'}</b>{result.totalRanked ? `Rank of ${result.totalRanked}` : 'Rank'}</span>
         <span><b>{result.totalCorrect}</b>Correct</span>
         <span><b>{result.totalWrong}</b>Incorrect</span>
         <span><b>{result.totalUnattempted}</b>Unattempted</span>
@@ -54,7 +59,7 @@ function StudentResultAnalysis({ result }: { result: StudentResult }) {
       return <article key={review.id} className={`student-review-card ${review.outcome}`}>
         <header><span>Q.{review.number}</span><b className={`student-outcome ${review.outcome}`}>{review.outcome === 'correct' ? <CheckCircle2 size={15}/> : review.outcome === 'wrong' ? <XCircle size={15}/> : null}{outcomeCopy[review.outcome]}</b><small>+{review.marks} / −{review.negativeMarks}</small></header>
         <MathRenderer content={review.question}/>{review.questionImage ? <img className="student-review-image" src={review.questionImage} alt={`Diagram for question ${review.number}`}/> : null}
-        <div className="student-answer-compare"><div><span>Your answer</span><b>{chosen ? `${chosen.key.toUpperCase()}. ${chosen.text || 'Image option'}` : review.selected?.toUpperCase() || 'Not answered'}</b></div><div><span>Correct answer</span><b>{correct ? `${correct.key.toUpperCase()}. ${correct.text || 'Image option'}` : review.correct?.toUpperCase() || 'Faculty review required'}</b></div></div>
+        <div className="student-answer-compare"><div><span>Your answer</span><AnswerValue option={chosen} fallback={review.selected?.toUpperCase() || 'Not answered'}/></div><div><span>Correct answer</span><AnswerValue option={correct} fallback={review.correct?.toUpperCase() || 'Faculty review required'}/></div></div>
         {review.solution ? <details><summary>View solution</summary><MathRenderer content={review.solution}/></details> : null}
       </article>;
     })}</section> : null}
