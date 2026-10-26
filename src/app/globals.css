@@ -6897,3 +6897,14 @@ div.exam-list-card {
 @media (max-width: 640px) { .paper-studio-source-tabs { width: 100%; }.paper-studio-source-tabs button { flex: 1; padding: 0 8px; font-size: 0.75rem; }.paper-studio-source-tabs button span { display: none; }.ai-form-grid { grid-template-columns: 1fr; }.ai-full-field { grid-column: auto; }.ai-options-grid { grid-template-columns: 1fr; }.ai-blueprint-card { padding: 16px; }.ai-studio-hero { padding: 18px; }.ai-review-header { padding: 15px; } }
 
 @media print { .paper-studio-source-tabs, .ai-studio-hero, .ai-studio-layout, .ai-review-header, .ai-question-list { display: none !important; }.ai-review-panel { border: 0; box-shadow: none; }.ai-print-preview { padding: 0; overflow: visible; background: #fff; } }
+
+/* The submitted-result screen is a report, not a small confirmation dialog.
+   This override is intentionally last because the base `.exam-message` rule
+   is shared with the narrow join/error states. */
+.exam-shell.exam-result-shell { display: block; padding: 34px clamp(20px, 3vw, 56px) 64px; }
+.exam-shell.exam-result-shell > .exam-message.student-result-message { width: 100%; max-width: none; padding: clamp(26px, 3vw, 44px); }
+
+@media (max-width: 760px) {
+  .exam-shell.exam-result-shell { padding: 18px 12px 40px; }
+  .exam-shell.exam-result-shell > .exam-message.student-result-message { padding: 22px 16px; }
+}
