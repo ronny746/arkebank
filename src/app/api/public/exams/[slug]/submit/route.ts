@@ -19,5 +19,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // Result review is part of the student delivery contract. This remains true
   // for historic exams that were created before the result-visibility switch
   // existed (and may therefore have this field set to false or absent).
-  return NextResponse.json({ success: true, result: { ...result, ...ranking, responseReview } });
+  return NextResponse.json({ success: true, result: { ...result, ...ranking, responseReview }, attempt: { student: attempt.student, startedAt: attempt.startedAt, submittedAt, status: body.autoSubmitted ? 'auto_submitted' : 'submitted' } });
 }

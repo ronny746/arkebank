@@ -5500,8 +5500,17 @@ body {
    student can return later and inspect every explanation without a cramped
    modal or an additional login surface. */
 .exam-result-shell { display: block; padding: 34px 20px 60px; }
-.student-result-message { width: min(960px, 100%); margin: 0 auto; }
+.student-result-message { width: min(1440px, 100%); margin: 0 auto; }
 .student-result-analysis { margin-top: 24px; text-align: left; }
+.student-attempt-details { display: grid; gap: 14px; margin-bottom: 16px; padding: 16px 18px; border: 1px solid var(--card-border); border-radius: 12px; background: #fff; }
+.student-attempt-details-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.student-attempt-details-heading span { color: var(--brand-emerald-dark); font-size: .7rem; font-weight: 900; letter-spacing: .1em; }
+.student-attempt-details-heading b { border-radius: 999px; padding: 5px 9px; background: var(--brand-emerald-subtle); color: var(--brand-emerald-dark); font-size: .72rem; }
+.student-attempt-details dl { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.student-attempt-details dl > div { min-width: 0; padding-right: 12px; border-right: 1px solid var(--card-border); }
+.student-attempt-details dl > div:last-child { padding-right: 0; border-right: 0; }
+.student-attempt-details dt { color: var(--text-muted); font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.student-attempt-details dd { margin: 5px 0 0; overflow-wrap: anywhere; color: var(--text-dark); font-size: .82rem; font-weight: 700; line-height: 1.35; }
 .student-result-hero { display: grid; grid-template-columns: 230px minmax(0, 1fr); overflow: hidden; border: 1px solid #B7E8C8; border-radius: 12px; background: #F4FCF7; }
 .student-result-mark { display: grid; align-content: center; justify-items: center; gap: 5px; min-height: 168px; padding: 20px; background: var(--brand-emerald); color: #fff; text-align: center; }
 .student-result-mark b { font-size: 3rem; line-height: 1; }
@@ -5561,6 +5570,9 @@ body {
   .student-result-mark { min-height: 128px; }
   .student-result-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .student-result-metrics span { border-top: 1px solid #CDECD8; }
+  .student-attempt-details { padding: 14px; }
+  .student-attempt-details dl { grid-template-columns: 1fr 1fr; gap: 12px 10px; }
+  .student-attempt-details dl > div { padding-right: 0; border-right: 0; }
 }
 
 @media (max-width: 980px) {
@@ -5569,6 +5581,8 @@ body {
   .student-result-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .student-result-metrics span { min-height: 78px; border-top: 1px solid #CDECD8; }
   .student-result-metrics span:nth-child(-n + 3) { border-top: 0; }
+  .student-attempt-details dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .student-attempt-details dl > div:nth-child(3) { padding-right: 0; border-right: 0; }
 }
 
 /* MathRenderer returns a span for inline option copy. It must never inherit the

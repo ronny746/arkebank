@@ -39,6 +39,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       success: true,
       alreadySubmitted: true,
       result: { ...assessment.result, ...ranking, responseReview: assessment.responseReview },
+      attempt: { student: completedAttempt.student, startedAt: completedAttempt.startedAt, submittedAt: completedAttempt.submittedAt, status: completedAttempt.status },
       message: 'Your submitted attempt was found. Here is your result analysis.',
     });
   }
