@@ -15,6 +15,9 @@ export interface QuestionExam {
 export interface QuestionItem {
   _id: string;
   id: number;
+  source?: 'database' | 'ai';
+  ai_provider?: string;
+  ai_model?: string;
   class_std: string;
   subject: string;
   topic?: string;

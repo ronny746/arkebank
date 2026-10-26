@@ -9,6 +9,7 @@ import {
 } from '@/types/paper';
 import MathRenderer from '../MathRenderer';
 import PaperPrintableDocument from './PaperPrintableDocument';
+import AiPaperStudioView from './AiPaperStudioView';
 import ExamCreatorModal from '../exams/ExamCreatorModal';
 import { QUESTION_TYPE_OPTIONS, type QuestionType } from '@/lib/question-types';
 import { 
@@ -114,6 +115,7 @@ export default function PaperGeneratorView({
   onNavigateToBank,
   paperId,
 }: PaperGeneratorViewProps) {
+  const [studioSource, setStudioSource] = useState<'bank' | 'ai'>('bank');
   // Active Studio Tab: editor | preview (student paper) | solutions (teacher key)
   const [studioTab, setStudioTab] = useState<'editor' | 'preview' | 'solutions'>('editor');
   const [builderMode, setBuilderMode] = useState<'configure' | 'edit'>('configure');
@@ -418,6 +420,10 @@ export default function PaperGeneratorView({
 
   // Load topics dynamically when class/subject changes
   useEffect(() => {
+    // AI Studio has its own prompt-only source. Do not keep refreshing question
+    // bank taxonomy in the background while the faculty member is composing an
+    // AI brief.
+    if (studioSource !== 'bank') return;
     const controller = new AbortController();
     async function fetchDynamicTopics() {
       setTaxonomyLoading(true);
@@ -500,7 +506,7 @@ export default function PaperGeneratorView({
     }
     void fetchDynamicTopics();
     return () => controller.abort();
-  }, [pickerSubject, selectedClass, selectedLang, selectedSubjects, isMultiSubjectExam, isCompetitive, isJeeAdvancedPcmPlan, minimumSubjectsForPart, questionType]);
+  }, [studioSource, pickerSubject, selectedClass, selectedLang, selectedSubjects, isMultiSubjectExam, isCompetitive, isJeeAdvancedPcmPlan, minimumSubjectsForPart, questionType]);
 
   // Filtered topics based on search input
   const filteredTopics = useMemo(() => {
@@ -1237,8 +1243,29 @@ export default function PaperGeneratorView({
     showWatermark: true,
   };
 
+  const studioSourceTabs = (
+    <nav className="paper-studio-source-tabs hide-print" aria-label="Paper creation source">
+      <button type="button" className={studioSource === 'bank' ? 'active' : ''} onClick={() => setStudioSource('bank')}>
+        <BookOpen size={16} /> Question Bank Studio
+      </button>
+      <button type="button" className={studioSource === 'ai' ? 'active' : ''} onClick={() => setStudioSource('ai')}>
+        <Sparkles size={16} /> AI Paper Studio <span>Claude</span>
+      </button>
+    </nav>
+  );
+
+  if (studioSource === 'ai') {
+    return (
+      <div className="paper-generator-wrapper ai-paper-generator-wrapper">
+        {studioSourceTabs}
+        <AiPaperStudioView classesList={classesList} subjectsList={subjectsList} showToast={showToast} />
+      </div>
+    );
+  }
+
   return (
     <div className={`paper-generator-wrapper ${studioFocusMode && builderMode === 'edit' ? 'studio-focus-mode' : ''}`}>
+      {studioSourceTabs}
       {/* Top Paper Studio Navigation & Quick Actions Bar */}
       {builderMode === 'edit' && <div className="paper-studio-nav">
         <div className="studio-nav-left">

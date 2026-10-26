@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { assessAttempt, calculateRank } from '@/lib/exam-results';
+import type { QuestionItem } from '@/types/paper';
 
-type ExamQuestion = { _id?: string; id?: string | number; question?: string; correct_option?: string; correct_answer?: string };
 type AttemptRecord = { status?: string; result?: { score?: number }; answers?: Record<string, string>; violations?: { tabSwitches?: number; fullScreenExits?: number }; [key: string]: unknown };
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -15,25 +16,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   ]);
   if (!rawExam) return NextResponse.json({ success: false, error: 'Exam not found.' }, { status: 404 });
 
-  const questions = (Array.isArray(rawExam.questions) ? rawExam.questions : []) as ExamQuestion[];
-  const attemptsWithReview = attempts.map(attempt => ({
-    ...(attempt as unknown as AttemptRecord),
-    responseReview: questions.map((question, index) => {
-      const questionId = String(question._id || question.id || index);
-      const selected = String((attempt as unknown as AttemptRecord).answers?.[questionId] || '');
-      const correct = String(question.correct_option || question.correct_answer || '');
-      return {
-        number: index + 1,
-        question: question.question || `Question ${index + 1}`,
-        selected: selected || null,
-        correct: correct || null,
-        outcome: !selected ? 'unattempted' : selected.toLowerCase() === correct.toLowerCase() ? 'correct' : 'wrong',
-      };
-    }),
-  }));
+  const questions = (Array.isArray(rawExam.questions) ? rawExam.questions : []) as QuestionItem[];
+  const submittedBase = attempts.filter(attempt => attempt.status === 'submitted' || attempt.status === 'auto_submitted');
+  const scores = submittedBase.map(attempt => Number((attempt as unknown as AttemptRecord).result?.score) || 0);
+  const attemptsWithReview = attempts.map(attempt => {
+    const typed = attempt as unknown as AttemptRecord;
+    const assessment = assessAttempt(questions, typed.answers || {});
+    const isSubmitted = typed.status === 'submitted' || typed.status === 'auto_submitted';
+    return {
+      ...typed,
+      result: isSubmitted ? { ...assessment.result, ...calculateRank(assessment.result.score, scores) } : typed.result,
+      responseReview: assessment.responseReview,
+    };
+  });
   const typedAttempts = attemptsWithReview as Array<AttemptRecord & { responseReview: unknown[] }>;
   const submitted = typedAttempts.filter(attempt => attempt.status === 'submitted' || attempt.status === 'auto_submitted');
-  const scores = submitted.map(attempt => Number(attempt.result?.score) || 0);
   const summary = {
     total: attempts.length,
     live: attempts.filter(attempt => attempt.status === 'in_progress').length,

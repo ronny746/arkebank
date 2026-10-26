@@ -55,7 +55,9 @@ export async function POST(req: Request) {
     paper: { title: body.paper.title, class_std: body.paper.class_std, subject: body.paper.subject, timeAllowed: body.paper.timeAllowed, totalMarks: body.paper.totalMarks, instructions: body.paper.instructions || [] },
     questions: uniqueQuestions, status: body.status === 'draft' ? 'draft' : 'published',
     startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), durationMinutes,
-    showResultsAfterSubmit: Boolean(body.showResultsAfterSubmit),
+    // Faculty can still turn this off explicitly; new exams show students a
+    // review by default so a submitted attempt is never a dead end.
+    showResultsAfterSubmit: body.showResultsAfterSubmit !== false,
     security: { requireFullScreen: body.security?.requireFullScreen !== false, disableCopyPaste: body.security?.disableCopyPaste !== false, maxTabSwitchesAllowed: Math.max(1, Math.min(10, Number(body.security?.maxTabSwitchesAllowed) || 3)) },
     createdBy: user.email, createdAt: now, updatedAt: now,
   };

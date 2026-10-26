@@ -24,6 +24,8 @@ export interface OnlineExam {
   security: ExamSecurity;
   createdAt: string;
   updatedAt: string;
+  /** Public route supplies this so closed exams can still expose an existing student's result lookup. */
+  isAvailable?: boolean;
 }
 
 export interface ExamAttempt {
@@ -38,4 +40,13 @@ export interface ExamAttempt {
   updatedAt?: string;
   submittedAt?: string;
   status: 'in_progress' | 'submitted' | 'auto_submitted';
+  result?: {
+    score: number;
+    maxScore: number;
+    percentage: number;
+    totalCorrect: number;
+    totalWrong: number;
+    totalUnattempted: number;
+    totalManualReview?: number;
+  };
 }
