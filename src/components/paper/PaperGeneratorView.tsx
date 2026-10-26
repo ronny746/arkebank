@@ -187,6 +187,11 @@ export default function PaperGeneratorView({
     () => [...new Set(topicSelections.map((selection) => selection.topic))],
     [topicSelections],
   );
+  const selectedScopeGroups = useMemo(() => {
+    const groups = new Map<string, number>();
+    topicSelections.forEach(({ subject }) => groups.set(subject, (groups.get(subject) || 0) + 1));
+    return [...groups.entries()].map(([subject, count]) => ({ subject, count }));
+  }, [topicSelections]);
   // A persisted/returned plan can have selected chapters without an active
   // preview tab. Treat that state as a combined preview so the question pane
   // never falls back to an empty instruction screen.
@@ -1610,7 +1615,13 @@ export default function PaperGeneratorView({
                   <label className="field-label">
                     Selected chapter scope ({topicSelections.length})
                   </label>
-                  {topicSelections.length > 0 && (
+                  {topicSelections.length > 8 ? (
+                    <div className="selected-scope-summary" role="status" aria-label={`${topicSelections.length} chapters selected`}>
+                      <span>Full scope selected</span>
+                      {selectedScopeGroups.map((group) => <button key={group.subject} type="button" onClick={() => { setPickerSubject(group.subject); setPreviewTopic(''); setPreviewSelectedScope(true); }}>{group.subject} <b>{group.count} chapters</b></button>)}
+                      <small>Manage individual chapters from the subject list on the left.</small>
+                    </div>
+                  ) : topicSelections.length > 0 ? (
                     <div className="selected-scope-list selected-scope-inline" aria-label="Selected chapters">
                       {topicSelections.map((scope) => (
                         <div className="selected-scope-chip" key={`${scope.subject}::${scope.topic}`}>
@@ -1630,7 +1641,7 @@ export default function PaperGeneratorView({
                         </div>
                       ))}
                     </div>
-                  )}
+                  ) : null}
                   <div className="topics-quick-actions">
                     {assessmentType === 'full' && <><button type="button" onClick={() => void handleSelectFullSyllabus()} className="btn-text-action" disabled={selectingFullSyllabus}>{selectingFullSyllabus ? 'Selecting full syllabus…' : 'Select full syllabus'}</button><span className="dot-sep">•</span></>}
                     <button type="button" onClick={handleSelectAllTopics} className="btn-text-action">Select all {pickerSubject || 'chapters'}</button>

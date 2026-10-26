@@ -36,7 +36,7 @@ export async function GET(req: Request) {
       .sort()
       .join('|') || 'none';
 
-    const cacheKey = `filters:${class_std || 'all'}:${subject || 'all'}:${topic || 'all'}:${scopeKey}:${withQuestions}:${lang || 'all'}`;
+    const cacheKey = `filters:${class_std || 'all'}:${subject || 'all'}:${topic || 'all'}:${scopeKey}:${withQuestions}:${formatScope || 'standard'}:${lang || 'all'}`;
 
     // Cache filters response in Redis/in-memory for 15 minutes (900 seconds)
     const result = await cached(cacheKey, 900, async () => {
@@ -67,7 +67,13 @@ export async function GET(req: Request) {
         syllabusQuery.class_std = class_std;
       }
       const questionScope: Record<string, unknown> = {};
-      if (class_std && class_std !== 'all') questionScope.class_std = class_std;
+      // Competitive full/part tests cover Class 11 + 12 material. Their
+      // dedicated JA/JM/NEET buckets are retained, but are not the only
+      // source because many valid hard questions live in the class buckets.
+      const competitiveSource = formatScope === 'assessment' && ['JA', 'JM', 'NEET', 'JEE Main', 'JEE Advanced', 'Competitive Exam'].includes(class_std || '');
+      if (class_std && class_std !== 'all') questionScope.class_std = competitiveSource
+        ? { $in: [...new Set([class_std, 'Class 11', 'Class 12'])] }
+        : class_std;
       if (lang && lang !== 'all') questionScope.lang = lang;
       const dynamicSubjects = (withQuestions
         ? await questionsCol.distinct('subject', questionScope)
@@ -144,7 +150,9 @@ export async function GET(req: Request) {
         const topicScope: Record<string, unknown> = { ...questionScope, subject };
         const questionTopics = await questionsCol.distinct('topic', topicScope);
         const usableTopics = new Set(questionTopics.filter(Boolean));
-        topics = topics.filter((item) => usableTopics.has(item));
+        // For a competitive assessment, obtain taxonomy directly from its
+        // combined question source rather than a thin JA/JM/NEET syllabus doc.
+        topics = competitiveSource ? [...usableTopics].sort() : topics.filter((item) => usableTopics.has(item));
       }
 
       // Multi-chapter Paper Studio requests pass exact Subject → Chapter pairs.

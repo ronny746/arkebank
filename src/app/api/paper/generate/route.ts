@@ -85,7 +85,10 @@ export async function POST(req: Request) {
     const baseMatch: Record<string, any> = {};
 
     if (class_std && class_std !== 'all') {
-      baseMatch.class_std = class_std;
+      const competitiveSource = competitive && ['JEE Main', 'JEE Advanced', 'NEET'].includes(competitiveExam);
+      baseMatch.class_std = competitiveSource
+        ? { $in: [...new Set([class_std, 'Class 11', 'Class 12'])] }
+        : class_std;
     }
     if (subjectList.length > 0) {
       baseMatch.subject = { $in: subjectList };
