@@ -3,16 +3,18 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { assessAttempt, calculateRank } from '@/lib/exam-results';
 import type { QuestionItem } from '@/types/paper';
+import { tenantDocumentQuery } from '@/lib/tenant';
 
 type AttemptRecord = { status?: string; result?: { score?: number }; answers?: Record<string, string>; violations?: { tabSwitches?: number; fullScreenExits?: number }; [key: string]: unknown };
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!extractAndVerifyToken(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  const authUser = extractAndVerifyToken(req);
+  if (!authUser) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   const { db } = await connectToDatabase();
   const [rawExam, attempts] = await Promise.all([
-    db.collection('exams').findOne({ id }),
-    db.collection('exam_attempts').find({ examId: id }, { projection: { sessionToken: 0 } }).sort({ startedAt: -1 }).toArray(),
+    db.collection('exams').findOne({ id, ...tenantDocumentQuery(authUser.tenantId) }),
+    db.collection('exam_attempts').find({ examId: id, ...tenantDocumentQuery(authUser.tenantId) }, { projection: { sessionToken: 0 } }).sort({ startedAt: -1 }).toArray(),
   ]);
   if (!rawExam) return NextResponse.json({ success: false, error: 'Exam not found.' }, { status: 404 });
 

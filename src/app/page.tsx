@@ -35,6 +35,7 @@ import TaggingInspectorModal from '@/components/TaggingInspectorModal';
 import EditTaggingModal from '@/components/EditTaggingModal';
 import QuestionCardSkeleton from '@/components/QuestionCardSkeleton';
 import SidebarFiltersSkeleton from '@/components/SidebarFiltersSkeleton';
+import { getTenantForHost, type TenantBrand } from '@/lib/tenant';
 
 type PortalView = 'dashboard' | 'bank' | 'generator' | 'saved' | 'exams';
 
@@ -48,6 +49,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
   const [user, setUser] = useState<{ email: string } | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [tenant, setTenant] = useState<TenantBrand>(() => getTenantForHost(''));
 
   // Dynamic Taxonomy State from Database
   const [classesList, setClassesList] = useState<string[]>([]);
@@ -125,6 +127,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
 
   // Check saved session on mount
   useEffect(() => {
+    setTenant(getTenantForHost(window.location.hostname));
     const savedUser = localStorage.getItem('arke_user');
     if (savedUser) {
       try {
@@ -370,16 +373,16 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
         <div className="header-left">
           <div className="header-brand">
             <Image
-              src="/logo.png"
-              alt="ARKE SCHOLARS Logo"
-              width={65}
-              height={50}
+              src={tenant.logoSrc}
+              alt={`${tenant.name} logo`}
+              width={tenant.logoWidth}
+              height={tenant.logoHeight}
               className="brand-logo-img"
               priority
             />
             <div className="brand-text-col">
-              <span className="brand-title">ARKE SCHOLARS</span>
-              <span className="brand-subtitle">Question Bank & Assessment Intelligence</span>
+              <span className="brand-title">{tenant.portalName}</span>
+              <span className="brand-subtitle">{tenant.subtitle}</span>
             </div>
           </div>
           <div className="live-db-pill" title="Live MongoDB production connection">

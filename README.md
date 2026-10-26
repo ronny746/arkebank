@@ -16,6 +16,25 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Brand hosts and faculty access
+
+One deployment supports two branded portals while keeping papers, exams and attempts isolated in the same database:
+
+- `bank.arkescholar.com` → ARKE SCHOLARS
+- `bank.theprepzo.com` → Prepzo
+
+Point both hostnames to the same application deployment. Copy `.env.example` to
+`.env.local` and set the faculty allowlists before production use:
+
+```bash
+ARKE_ADMIN_EMAILS=admin@arkescholar.com,rohit@arkescholar.com
+PREPZO_ADMIN_EMAILS=prepzo-admin@example.com
+```
+
+Do not place API keys or real faculty addresses in `.env.example`. The question
+bank is shared; saved papers, exams, exam attempts, public links, and faculty
+sessions are separated by hostname/tenant.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

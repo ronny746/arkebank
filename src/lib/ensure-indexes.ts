@@ -38,17 +38,20 @@ export async function ensureDatabaseIndexes(db: Db): Promise<void> {
       pCol.createIndex({ updatedAt: -1 }, { background: true, name: 'idx_paper_updatedAt' }),
       pCol.createIndex({ createdAt: -1 }, { background: true, name: 'idx_paper_createdAt' }),
       pCol.createIndex({ class_std: 1, subject: 1 }, { background: true, name: 'idx_paper_cls_sub' }),
+      pCol.createIndex({ tenantId: 1, updatedAt: -1 }, { background: true, name: 'idx_paper_tenant_updated' }),
 
       // 3. Exams collection (Public & Admin)
       eCol.createIndex({ slug: 1 }, { unique: true, background: true, name: 'idx_exam_slug' }),
       eCol.createIndex({ id: 1 }, { unique: true, background: true, name: 'idx_exam_id' }),
       eCol.createIndex({ paperId: 1 }, { background: true, name: 'idx_exam_paperId' }),
       eCol.createIndex({ status: 1, createdAt: -1 }, { background: true, name: 'idx_exam_status_created' }),
+      eCol.createIndex({ tenantId: 1, updatedAt: -1 }, { background: true, name: 'idx_exam_tenant_updated' }),
 
       // 4. Exam attempts collection
       aCol.createIndex({ sessionToken: 1 }, { unique: true, background: true, name: 'idx_attempt_token' }),
       aCol.createIndex({ examId: 1, studentEmail: 1 }, { background: true, name: 'idx_attempt_exam_email' }),
       aCol.createIndex({ examId: 1, createdAt: -1 }, { background: true, name: 'idx_attempt_exam_created' }),
+      aCol.createIndex({ tenantId: 1, examId: 1, startedAt: -1 }, { background: true, name: 'idx_attempt_tenant_exam_started' }),
 
       // 5. Syllabus collection
       sCol.createIndex({ class_std: 1, subject: 1, topic: 1 }, { background: true, name: 'idx_syllabus_cls_sub_top' }),

@@ -30,6 +30,8 @@ export default function SavedPapersView({
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [paperForExam, setPaperForExam] = useState<SavedPaper | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SavedPaper | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchSavedPapers = async () => {
     setLoading(true);
@@ -107,16 +109,16 @@ export default function SavedPapersView({
     onLoadPaper(paper);
   };
 
-  const handleDelete = async (paperId: string) => {
-    if (!confirm('Are you sure you want to delete this saved paper?')) return;
-
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     // Remove via the database API.
     try {
       const token = localStorage.getItem('arke_token');
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch(`/api/paper/saved/${paperId}`, {
+      const response = await fetch(`/api/paper/saved/${deleteTarget.id}`, {
         method: 'DELETE',
         headers,
         credentials: 'include',
@@ -125,11 +127,12 @@ export default function SavedPapersView({
         const data = await response.json().catch(() => null);
         throw new Error(data?.error || 'Could not delete the paper from the database.');
       }
-      setPapers((prev) => prev.filter((p) => p.id !== paperId));
+      setPapers((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
       showToast('Paper deleted from library.');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Could not delete the paper from the database.');
-    }
+    } finally { setDeleting(false); }
   };
 
   return (
@@ -283,7 +286,7 @@ export default function SavedPapersView({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleDelete(paper.id)}
+                    onClick={() => setDeleteTarget(paper)}
                     className="btn-del-paper"
                     title="Delete saved paper"
                   >
@@ -296,6 +299,17 @@ export default function SavedPapersView({
         </div>
       )}
       {paperForExam && <ExamCreatorModal paper={paperForExam} onClose={() => setPaperForExam(null)} showToast={showToast} />}
+      {deleteTarget && <div className="exam-delete-dialog-backdrop" role="presentation">
+        <section className="exam-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-paper-title" aria-describedby="delete-paper-description">
+          <button className="exam-delete-dialog-close" type="button" aria-label="Close delete confirmation" disabled={deleting} onClick={() => setDeleteTarget(null)}><X size={18}/></button>
+          <div className="exam-delete-dialog-icon"><Trash2 size={22}/></div>
+          <p className="dashboard-eyebrow">PERMANENT ACTION</p>
+          <h2 id="delete-paper-title">Delete this saved paper?</h2>
+          <p id="delete-paper-description"><strong>{deleteTarget.title}</strong> will be permanently removed from this library. This cannot be undone.</p>
+          <div className="exam-delete-dialog-summary"><span>{deleteTarget.totalQuestions || deleteTarget.questions?.length || 0} questions</span><span>{deleteTarget.totalMarks || 0} marks</span></div>
+          <div className="exam-delete-dialog-actions"><button type="button" disabled={deleting} onClick={() => setDeleteTarget(null)}>Keep paper</button><button type="button" className="exam-delete-confirm" disabled={deleting} onClick={() => void handleDelete()}>{deleting ? 'Deleting…' : 'Delete permanently'}</button></div>
+        </section>
+      </div>}
     </div>
   );
 }

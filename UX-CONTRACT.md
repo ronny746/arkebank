@@ -29,3 +29,9 @@ Paper preview checks saved papers for repeated question IDs and labels a prior u
 - A submitted attempt is immutable. When the same student returns to an exam link with the same email and mobile number, the system finds the completed attempt and opens its result analysis instead of creating a duplicate attempt.
 - Students receive score, rank, correct/wrong/unattempted counts, a question-by-question answer comparison, and the stored solution after submission. Non-objective answers are explicitly marked for manual faculty review rather than automatically marked incorrect.
 - Faculty tracking uses the same server-side calculation as the student result. Results include the current rank among submitted attempts and an expandable per-student review with selected answer, correct answer, solution, marks, and question media.
+
+## Tenant isolation
+
+- The active tenant is selected solely from the request hostname. `bank.arkescholar.com` serves ARKE and `bank.theprepzo.com` serves Prepzo while retaining one MongoDB deployment.
+- Faculty authentication tokens carry the tenant ID and cannot access the other tenant's protected APIs. Each tenant has an independent allowlist configured through `ARKE_ADMIN_EMAILS` or `PREPZO_ADMIN_EMAILS`.
+- Papers, exams, attempts, saved-paper activity and public-exam reads are tenant-scoped. The underlying verified question bank remains shared unless a future question-level tenant scope is explicitly introduced.

@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Mail, KeyRound, ShieldCheck, ArrowRight, RefreshCw, CheckCircle, Sparkles, Lock, ShieldAlert } from 'lucide-react';
+import { getTenantForHost } from '@/lib/tenant';
 
 interface LoginFormProps {
   onSuccess: (user: any) => void;
 }
-
-const ALLOWED_EMAILS = ['admin@arkescholar.com', 'rohit@arkescholar.com'];
 
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [step, setStep] = useState<'email' | 'otp'>('email');
@@ -18,6 +17,13 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // Start with the default tenant so server and client render the same markup.
+  // The browser then selects its brand from the current hostname.
+  const [tenant, setTenant] = useState(() => getTenantForHost(''));
+
+  useEffect(() => {
+    setTenant(getTenantForHost(window.location.hostname));
+  }, []);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,11 +34,6 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
 
     if (!cleanEmail || !cleanEmail.includes('@')) {
       setError('Please enter a valid email address');
-      return;
-    }
-
-    if (!ALLOWED_EMAILS.includes(cleanEmail)) {
-      setError('Access Denied: This email address is not authorized for portal access.');
       return;
     }
 
@@ -103,20 +104,20 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           <div className="logo-wrapper">
             <div className="login-brand-pill">
               <Image
-                src="/logo.png"
-                alt="ARKE SCHOLARS Logo"
-                width={36}
-                height={36}
+                src={tenant.logoSrc}
+                alt={`${tenant.name} logo`}
+                width={tenant.logoWidth}
+                height={tenant.logoHeight}
                 priority
                 style={{ objectFit: 'contain' }}
               />
               <div className="login-brand-meta">
-                <span className="login-brand-title">ARKE SCHOLARS</span>
-                <span className="login-brand-sub">Assessment Intelligence</span>
+                <span className="login-brand-title">{tenant.portalName}</span>
+                <span className="login-brand-sub">{tenant.subtitle}</span>
               </div>
             </div>
           </div>
-          <h2 className="login-title">Scholar & Faculty Gateway</h2>
+          <h2 className="login-title">{tenant.name} Faculty Gateway</h2>
           <p className="login-subtitle">
             Secure authentication to explore 5,27,000+ standardized questions, solutions, and diagrams.
           </p>

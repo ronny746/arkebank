@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { delCache, delCachePattern } from '@/lib/cache';
+import { tenantDocumentQuery } from '@/lib/tenant';
 
 export async function DELETE(
   req: Request,
@@ -25,7 +26,9 @@ export async function DELETE(
     const attemptsCol = db.collection('exam_attempts');
 
     // Find the exam first to get its slug for cache invalidation
-    const exam = await examsCol.findOne({ $or: [{ id }, { slug: id }] });
+    const exam = await examsCol.findOne({
+      $and: [tenantDocumentQuery(authUser.tenantId), { $or: [{ id }, { slug: id }] }],
+    });
     if (!exam) {
       return NextResponse.json(
         { success: false, error: 'Exam not found' },
@@ -37,11 +40,11 @@ export async function DELETE(
     await examsCol.deleteOne({ _id: exam._id });
 
     // Also remove any attempts for this exam
-    await attemptsCol.deleteMany({ examId: exam.id });
+    await attemptsCol.deleteMany({ examId: exam.id, ...tenantDocumentQuery(authUser.tenantId) });
 
     // Invalidate Redis/Memory caches
     if (exam.slug) {
-      await delCache(`exam:public:${exam.slug}`);
+      await delCache(`exam:public:${authUser.tenantId}:${exam.slug}`);
     }
     await delCachePattern('exam:*');
 

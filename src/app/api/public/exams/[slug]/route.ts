@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { cached } from '@/lib/cache';
+import { getTenantForRequest, tenantDocumentQuery } from '@/lib/tenant';
 
-export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const tenant = getTenantForRequest(req);
 
   try {
-    const exam = await cached(`exam:public:${slug}`, 60, async () => {
+    const exam = await cached(`exam:public:${tenant.id}:${slug}`, 60, async () => {
       const { db } = await connectToDatabase();
       return await db.collection('exams').findOne(
-        { slug },
+        { slug, ...tenantDocumentQuery(tenant.id) },
         { projection: { 'questions.correct_option': 0, 'questions.correct_answer': 0, 'questions.solution': 0 } }
       );
     });

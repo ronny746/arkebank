@@ -1,11 +1,12 @@
 import crypto from 'crypto';
+import { getTenantForRequest, tenantAdminEmails, type TenantId } from '@/lib/tenant';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'arke_scholars_jwt_secret_token_2026_948291048_ultra_secure';
-const ALLOWED_EMAILS = ['admin@arkescholar.com', 'rohit@arkescholar.com'];
 
 export interface TokenPayload {
   email: string;
   role: string;
+  tenantId: TenantId;
   iat: number;
   exp: number;
 }
@@ -13,12 +14,13 @@ export interface TokenPayload {
 /**
  * Signs a URL-safe HMAC-SHA256 JWT token valid for 7 days
  */
-export function signToken(email: string, expiresInSeconds = 7 * 24 * 3600): string {
+export function signToken(email: string, tenantId: TenantId, expiresInSeconds = 7 * 24 * 3600): string {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
   const payload: TokenPayload = {
     email: email.toLowerCase().trim(),
     role: 'Authorized Administrator',
+    tenantId,
     iat: now,
     exp: now + expiresInSeconds,
   };
@@ -61,8 +63,10 @@ export function verifyToken(token: string | null | undefined): TokenPayload | nu
       return null;
     }
 
-    // Check strict whitelist
-    if (!ALLOWED_EMAILS.includes(payload.email.toLowerCase().trim())) {
+    // Tokens created before multi-tenant support are ARKE-only by definition.
+    const tenantId: TenantId = payload.tenantId === 'prepzo' ? 'prepzo' : 'arke';
+    payload.tenantId = tenantId;
+    if (!tenantAdminEmails(tenantId).includes(payload.email.toLowerCase().trim())) {
       return null;
     }
 
@@ -76,11 +80,16 @@ export function verifyToken(token: string | null | undefined): TokenPayload | nu
  * Extracts and verifies token from Authorization header (Bearer <token>) OR Cookie (arke_session_token)
  */
 export function extractAndVerifyToken(req: Request): TokenPayload | null {
+  const requestTenant = getTenantForRequest(req).id;
+  const verifyForRequest = (token: string) => {
+    const payload = verifyToken(token);
+    return payload?.tenantId === requestTenant ? payload : null;
+  };
   // 1. Check Bearer token in Authorization header
   const authHeader = req.headers.get('authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7).trim();
-    const payload = verifyToken(token);
+    const payload = verifyForRequest(token);
     if (payload) return payload;
   }
 
@@ -94,7 +103,7 @@ export function extractAndVerifyToken(req: Request): TokenPayload | null {
       })
     );
     if (cookies.arke_session_token) {
-      const payload = verifyToken(cookies.arke_session_token);
+      const payload = verifyForRequest(cookies.arke_session_token);
       if (payload) return payload;
     }
   }

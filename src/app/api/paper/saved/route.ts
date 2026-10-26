@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { cached } from '@/lib/cache';
+import { tenantDocumentQuery } from '@/lib/tenant';
 
 export async function GET(req: Request) {
   try {
@@ -24,18 +25,27 @@ export async function GET(req: Request) {
     const papersCol = db.collection('papers');
 
     const cacheKey = search
-      ? `papers:search:${encodeURIComponent(search.toLowerCase())}:${limit}`
-      : `papers:list:${limit}`;
+      ? `papers:${authUser.tenantId}:search:${encodeURIComponent(search.toLowerCase())}:${limit}`
+      : `papers:${authUser.tenantId}:list:${limit}`;
 
     const papers = await cached(cacheKey, 60, async () => {
-      const query: any = {};
+      const tenantQuery = tenantDocumentQuery(authUser.tenantId);
+      const query: any = { ...tenantQuery };
       if (search) {
-        query.$or = [
+        const searchQuery = [
           { title: { $regex: search, $options: 'i' } },
           { subject: { $regex: search, $options: 'i' } },
           { class_std: { $regex: search, $options: 'i' } },
           { instituteName: { $regex: search, $options: 'i' } },
         ];
+        // ARKE's legacy-document scope has an $or; Prepzo's exact tenant
+        // scope does not. Keep both forms valid when search is combined.
+        if ('$or' in tenantQuery) {
+          delete query.$or;
+          query.$and = [{ $or: tenantQuery.$or }, { $or: searchQuery }];
+        } else {
+          query.$and = [{ $or: searchQuery }];
+        }
       }
       return await papersCol
         .find(query)

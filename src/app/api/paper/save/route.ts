@@ -2,6 +2,7 @@ import { delCache, delCachePattern } from '@/lib/cache';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { tenantDocumentQuery } from '@/lib/tenant';
 
 export async function POST(req: Request) {
   try {
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       ...paper,
       id: paperId,
       createdBy: authUser.email,
+      tenantId: authUser.tenantId,
       updatedAt: nowIso,
       createdAt: paper.createdAt || nowIso,
     };
@@ -43,7 +45,7 @@ export async function POST(req: Request) {
     await delCache(`paper:id:${paperId}`);
 
     await papersCol.updateOne(
-      { id: paperId },
+      { id: paperId, ...tenantDocumentQuery(authUser.tenantId) },
       { $set: paperDoc },
       { upsert: true }
     );

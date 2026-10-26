@@ -22,3 +22,7 @@ ARKE Scholars is a faculty-facing question-bank and assessment workspace, with a
 ## Runtime ownership
 
 Tokens are defined in `src/app/globals.css`. Shared faculty, exam-control and student-exam classes in the same stylesheet consume those tokens; feature components do not define independent palette values.
+
+## Tenant-aware brand shell
+
+The faculty login, application header, browser metadata, and student exam shell resolve their logo and name from the request hostname. Tenant branding changes identity only; the interaction model, design tokens, accessible controls, and layout contracts remain consistent across ARKE and Prepzo.

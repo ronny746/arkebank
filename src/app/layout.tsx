@@ -1,10 +1,15 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { getTenantForHost } from '@/lib/tenant';
 import 'katex/dist/katex.min.css';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: 'ARKE SCHOLARS — Question Bank & Assessment Intelligence Portal',
-  description: 'Bilingual standardized question repository covering Class 9-12, JEE Main, JEE Advanced, and NEET with KaTeX math formulas, verified step-by-step solutions, and scalable vector diagrams.',
+export async function generateMetadata(): Promise<Metadata> {
+  const requestHeaders = await headers();
+  const tenant = getTenantForHost(requestHeaders.get('x-forwarded-host') || requestHeaders.get('host'));
+  return {
+  title: `${tenant.portalName} — ${tenant.subtitle}`,
+  description: `${tenant.name} assessment workspace with verified questions, exam delivery, and student results.`,
   icons: {
     icon: [
       { url: '/favicon.ico' },
@@ -14,7 +19,8 @@ export const metadata: Metadata = {
     shortcut: '/favicon.ico',
     apple: '/apple-touch-icon.png',
   },
-};
+  };
+}
 
 export default function RootLayout({
   children,

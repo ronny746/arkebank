@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
+import { getTenantForRequest, tenantDocumentQuery } from '@/lib/tenant';
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const body = await req.json();
+  const tenant = getTenantForRequest(req);
   const { db } = await connectToDatabase();
-  const exam = await db.collection('exams').findOne({ slug }, { projection: { id: 1 } });
+  const exam = await db.collection('exams').findOne({ slug, ...tenantDocumentQuery(tenant.id) }, { projection: { id: 1 } });
 
   if (!exam || !body?.attemptId || !body?.sessionToken) {
     return NextResponse.json({ success: false, error: 'Invalid exam session.' }, { status: 401 });
@@ -16,6 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     sessionToken: body.sessionToken,
     examId: exam.id,
     status: 'in_progress',
+    ...tenantDocumentQuery(tenant.id),
   });
   if (!attempt) return NextResponse.json({ success: false, error: 'Exam session is no longer active.' }, { status: 409 });
 

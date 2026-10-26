@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { saveOtp } from '@/lib/otp-store';
-
-const ALLOWED_EMAILS = ['admin@arkescholar.com', 'rohit@arkescholar.com'];
+import { getTenantForRequest, tenantAdminEmails } from '@/lib/tenant';
 
 export async function POST(req: Request) {
   try {
@@ -12,8 +11,17 @@ export async function POST(req: Request) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    const tenant = getTenantForRequest(req);
+    const allowedEmails = tenantAdminEmails(tenant.id);
 
-    if (!ALLOWED_EMAILS.includes(normalizedEmail)) {
+    if (!allowedEmails.length) {
+      return NextResponse.json(
+        { error: `${tenant.name} faculty access has not been configured yet.` },
+        { status: 503 }
+      );
+    }
+
+    if (!allowedEmails.includes(normalizedEmail)) {
       return NextResponse.json(
         { error: 'Access Denied: This email address is not authorized for portal access.' },
         { status: 403 }
@@ -22,13 +30,13 @@ export async function POST(req: Request) {
 
     // Generate 6-digit cryptographically random OTP
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    saveOtp(normalizedEmail, generatedOtp, 600); // 10 minutes expiry
+    saveOtp(`${tenant.id}:${normalizedEmail}`, generatedOtp, 600); // 10 minutes expiry
 
     console.log(`[AUTH] Secure OTP generated for ${normalizedEmail}: ${generatedOtp}`);
 
     return NextResponse.json({
       success: true,
-      message: `Security code sent to ${normalizedEmail}.`,
+      message: `Security code sent to ${normalizedEmail} for ${tenant.name}.`,
       demoOtp: generatedOtp // Provided on screen for immediate testing
     });
   } catch (error: any) {

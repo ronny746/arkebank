@@ -4,13 +4,16 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { delCache } from '@/lib/cache';
 import { getPublicExamUrl } from '@/lib/public-url';
+import { tenantDocumentQuery } from '@/lib/tenant';
 
 const admin = (req: Request) => extractAndVerifyToken(req);
 
 export async function GET(req: Request) {
-  if (!admin(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  const user = admin(req);
+  if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   const { db } = await connectToDatabase();
   const exams = await db.collection('exams').aggregate([
+    { $match: tenantDocumentQuery(user.tenantId) },
     { $lookup: { from: 'exam_attempts', localField: 'id', foreignField: 'examId', as: 'attempts' } },
     {
       $addFields: {
@@ -60,15 +63,16 @@ export async function POST(req: Request) {
     showResultsAfterSubmit: body.showResultsAfterSubmit !== false,
     security: { requireFullScreen: body.security?.requireFullScreen !== false, disableCopyPaste: body.security?.disableCopyPaste !== false, maxTabSwitchesAllowed: Math.max(1, Math.min(10, Number(body.security?.maxTabSwitchesAllowed) || 3)) },
     createdBy: user.email, createdAt: now, updatedAt: now,
+    tenantId: user.tenantId,
   };
   const { db } = await connectToDatabase();
   await db.collection('exams').insertOne(exam);
-  await delCache(`exam:public:${exam.slug}`);
+  await delCache(`exam:public:${user.tenantId}:${exam.slug}`);
   return NextResponse.json({
     success: true,
     exam,
     publicUrl: `/e/${exam.slug}`,
-    liveUrl: getPublicExamUrl(exam.slug),
+    liveUrl: getPublicExamUrl(exam.slug, req.headers.get('x-forwarded-host') || req.headers.get('host')),
     duplicatesRemoved: body.paper.questions.length - uniqueQuestions.length,
   }, { status: 201 });
 }

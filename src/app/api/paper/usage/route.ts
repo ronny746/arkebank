@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { tenantDocumentQuery } from '@/lib/tenant';
 
 type StoredQuestion = { _id?: string | number; id?: string | number };
 
@@ -39,8 +40,11 @@ export async function POST(req: Request) {
       db.collection('papers')
       .find(
         {
-          ...(excludePaperId ? { id: { $ne: excludePaperId } } : {}),
-          ...questionMatch,
+          $and: [
+            tenantDocumentQuery(authUser.tenantId),
+            ...(excludePaperId ? [{ id: { $ne: excludePaperId } }] : []),
+            questionMatch,
+          ],
         },
         { projection: { id: 1, title: 1, updatedAt: 1, createdAt: 1, questions: 1 } },
       )
@@ -48,7 +52,7 @@ export async function POST(req: Request) {
       .limit(100)
       .toArray(),
       db.collection('exams')
-        .find(questionMatch, { projection: { id: 1, title: 1, updatedAt: 1, createdAt: 1, questions: 1 } })
+        .find({ $and: [tenantDocumentQuery(authUser.tenantId), questionMatch] }, { projection: { id: 1, title: 1, updatedAt: 1, createdAt: 1, questions: 1 } })
         .sort({ updatedAt: -1 })
         .limit(100)
         .toArray(),

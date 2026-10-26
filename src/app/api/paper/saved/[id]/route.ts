@@ -2,6 +2,7 @@ import { cached, delCache, delCachePattern } from '@/lib/cache';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { tenantDocumentQuery } from '@/lib/tenant';
 
 export async function GET(
   req: Request,
@@ -20,12 +21,12 @@ export async function GET(
     }
 
     const { id } = await params;
-    const cacheKey = `paper:id:${id}`;
+    const cacheKey = `paper:${authUser.tenantId}:id:${id}`;
 
     const paper = await cached(cacheKey, 300, async () => {
       const { db } = await connectToDatabase();
       const papersCol = db.collection('papers');
-      return await papersCol.findOne({ id });
+      return await papersCol.findOne({ id, ...tenantDocumentQuery(authUser.tenantId) });
     });
 
     if (!paper) {
@@ -69,7 +70,7 @@ export async function DELETE(
     const { db } = await connectToDatabase();
     const papersCol = db.collection('papers');
 
-    const result = await papersCol.deleteOne({ id });
+    const result = await papersCol.deleteOne({ id, ...tenantDocumentQuery(authUser.tenantId) });
     await delCachePattern('papers:*');
     await delCache(`paper:id:${id}`);
 
