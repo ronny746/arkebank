@@ -18,7 +18,6 @@ export default function ExamCreatorModal({
   const [duration, setDuration] = useState(Number.parseInt(paper.timeAllowed || '60', 10) || 60);
   const [creating, setCreating] = useState(false);
   const [link, setLink] = useState('');
-  const [showResultsAfterSubmit, setShowResultsAfterSubmit] = useState(true);
   const [security, setSecurity] = useState({
     requireFullScreen: true,
     disableCopyPaste: true,
@@ -42,7 +41,6 @@ export default function ExamCreatorModal({
           durationMinutes: duration,
           status: 'published',
           security,
-          showResultsAfterSubmit,
           endsAt: new Date(Date.now() + 7 * 86400000).toISOString(),
         }),
       });
@@ -129,10 +127,7 @@ export default function ExamCreatorModal({
                   ))}
                 </select>
               </label>
-              <label>
-                <input type="checkbox" checked={showResultsAfterSubmit} onChange={(e) => setShowResultsAfterSubmit(e.target.checked)} />
-                Show score, answers and solutions after submission
-              </label>
+              <p className="exam-result-visibility-note">After submission, students can always view their score, result analysis and solutions.</p>
             </fieldset>
             <button className="exam-primary" disabled={creating || !title.trim()} onClick={create}>
               {creating ? 'Creating secure exam…' : 'Create exam and generate link'}

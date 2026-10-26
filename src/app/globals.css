@@ -5537,6 +5537,7 @@ body {
 .student-review-card details { margin-top: 12px; padding: 10px 12px; border-radius: 7px; background: #F8FBFF; color: var(--text-body); font-size: .84rem; }
 .student-review-card summary { color: var(--primary-navy); font-weight: 800; cursor: pointer; }
 .exam-return-note { margin-top: 8px !important; color: #075E38 !important; font-size: .76rem; }
+.exam-result-visibility-note { margin: 10px 0 0; padding: 9px 10px; border: 1px solid #B7E8C8; border-radius: 7px; background: var(--brand-emerald-subtle); color: #087443; font-size: .76rem; line-height: 1.45; }
 
 /* Explicit card action: avoids treating the entire exam summary as a hidden
    clickable surface while preserving the established card layout. */

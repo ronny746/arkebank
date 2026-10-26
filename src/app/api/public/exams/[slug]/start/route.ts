@@ -38,8 +38,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({
       success: true,
       alreadySubmitted: true,
-      result: exam.showResultsAfterSubmit ? { ...assessment.result, ...ranking, responseReview: assessment.responseReview } : undefined,
-      message: exam.showResultsAfterSubmit ? 'Your submitted attempt was found. Here is your result analysis.' : 'Your submitted attempt was found. Results are not available yet.',
+      result: { ...assessment.result, ...ranking, responseReview: assessment.responseReview },
+      message: 'Your submitted attempt was found. Here is your result analysis.',
     });
   }
 

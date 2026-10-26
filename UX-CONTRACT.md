@@ -27,5 +27,5 @@ Paper preview checks saved papers for repeated question IDs and labels a prior u
 ## Exam delivery and results
 
 - A submitted attempt is immutable. When the same student returns to an exam link with the same email and mobile number, the system finds the completed attempt and opens its result analysis instead of creating a duplicate attempt.
-- When the faculty leaves result visibility enabled (the default), students receive score, rank, correct/wrong/unattempted counts, a question-by-question answer comparison, and the stored solution after submission. Non-objective answers are explicitly marked for manual faculty review rather than automatically marked incorrect.
+- Students receive score, rank, correct/wrong/unattempted counts, a question-by-question answer comparison, and the stored solution after submission. Non-objective answers are explicitly marked for manual faculty review rather than automatically marked incorrect.
 - Faculty tracking uses the same server-side calculation as the student result. Results include the current rank among submitted attempts and an expandable per-student review with selected answer, correct answer, solution, marks, and question media.

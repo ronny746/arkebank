@@ -16,5 +16,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     { projection: { 'result.score': 1 } },
   ).toArray();
   const ranking = calculateRank(result.score, submittedAttempts.map(item => Number(item.result?.score) || 0));
-  return NextResponse.json({ success: true, result: exam.showResultsAfterSubmit ? { ...result, ...ranking, responseReview } : undefined });
+  // Result review is part of the student delivery contract. This remains true
+  // for historic exams that were created before the result-visibility switch
+  // existed (and may therefore have this field set to false or absent).
+  return NextResponse.json({ success: true, result: { ...result, ...ranking, responseReview } });
 }
