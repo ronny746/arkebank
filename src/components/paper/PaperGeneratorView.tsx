@@ -2061,8 +2061,8 @@ export default function PaperGeneratorView({
             <div className="wizard-card builder-blueprint-card blueprint-step step-three">
               <h3 className="card-heading">3. Paper balance & build</h3>
 
-              <div className="form-fields-grid">
-                <div className="form-field full-col">
+              <div className="form-fields-grid balance-top-grid">
+                <div className="form-field balance-language-field">
                   <label className="field-label">Paper Language / माध्यम</label>
                   <div className="pill-grid">
                     <button
@@ -2082,7 +2082,7 @@ export default function PaperGeneratorView({
                   </div>
                 </div>
 
-                <div className={`form-field full-col scoring-settings-card ${supportsNegativeMarking ? 'has-negative-marking' : ''}`}>
+                <div className={`form-field scoring-settings-card ${supportsNegativeMarking ? 'has-negative-marking' : ''}`}>
                   <div className="scoring-settings-heading">
                     <div><span>Scoring</span><b>{supportsNegativeMarking ? `+${marksPerQuestion} correct · −${negativeMarks} incorrect` : `+${marksPerQuestion} for each correct answer`}</b></div>
                     {!supportsNegativeMarking && <small>No negative marking for this paper pattern</small>}
@@ -2111,13 +2111,13 @@ export default function PaperGeneratorView({
                   </div>
                 </div>
 
-                <div className="form-field full-col blueprint-readonly-summary" role="status">
+                <div className="form-field blueprint-readonly-summary" role="status">
                   <span>Question pattern</span>
                   <b>{QUESTION_TYPE_OPTIONS.find((item) => item.id === questionType)?.label || 'Mix All Types'}</b>
                   <button type="button" onClick={() => setBuilderStep(1)}>Edit blueprint</button>
                 </div>
 
-                <div className="form-field full-col">
+                <div className="form-field balance-filter-field">
                   <label className="field-label">Question Filters</label>
                   <div className="checkboxes-row">
                     <label className="checkbox-item">
