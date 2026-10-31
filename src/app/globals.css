@@ -5783,7 +5783,7 @@ body {
 .generator-wizard-container[data-step='2'] .presets-bar,
 .generator-wizard-container[data-step='3'] .presets-bar { display: none; }
 .generator-wizard-container .wizard-form-grid { grid-template-columns: minmax(0, 1fr); flex: 1; min-height: 0; }
-.generator-wizard-container .wizard-card { width: min(100%, 1180px); margin: 0 auto; padding: 22px 26px; }
+.generator-wizard-container .wizard-card { width: min(100%, 1360px); margin: 0 auto; padding: 22px 26px; }
 .generator-wizard-container[data-step='1'] .step-two,
 .generator-wizard-container[data-step='1'] .builder-blueprint-card,
 .generator-wizard-container[data-step='2'] .step-one,
@@ -5812,7 +5812,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  width: min(100%, 1180px);
+  width: min(100%, 1360px);
   margin: 0 auto;
   padding: 12px 14px;
   border: 1px solid #D8E1EE;
