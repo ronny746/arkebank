@@ -88,6 +88,7 @@ type TopicScope = {
 type AssessmentTarget = 'school' | 'competitive';
 type AssessmentType = 'viva' | 'chapter' | 'part' | 'full';
 type CompetitiveExam = 'JEE Main' | 'JEE Advanced' | 'NEET';
+type BlueprintPreset = 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse';
 
 const EXAM_CLASS_VALUE: Record<CompetitiveExam, string> = {
   'JEE Main': 'JM',
@@ -187,6 +188,7 @@ export default function PaperGeneratorView({
   const [hasImageOnly, setHasImageOnly] = useState<boolean>(false);
   const [questionType, setQuestionType] = useState<QuestionType>('all');
   const [availableQuestionTypes, setAvailableQuestionTypes] = useState<QuestionType[]>(['all']);
+  const [selectedPreset, setSelectedPreset] = useState<BlueprintPreset | ''>('');
   // A teacher may intentionally clear the multi-subject scope. Keep that
   // choice through a taxonomy refresh instead of silently restoring all
   // available subjects.
@@ -303,6 +305,22 @@ export default function PaperGeneratorView({
       : competitiveExam === 'JEE Advanced' ? 18 * subjectCount : 25 * subjectCount;
     return { locked: true, duration: `${minutes} Mins`, count: perSubject, formats: COMPETITIVE_FORMATS[competitiveExam], summary: competitiveExam === 'JEE Advanced' ? `JEE Advanced Part test: ${subjectCount} selected subject${subjectCount === 1 ? '' : 's'} · 18 questions per subject.` : `${competitiveExam} part test: ${subjectCount} selected subject${subjectCount === 1 ? '' : 's'} determine duration and count.` };
   }, [assessmentType, competitiveExam, isCompetitive, selectedSubject, selectedSubjects]);
+
+  // Board/theory papers should not imply a penalty that their pattern does not
+  // prescribe. JEE Main and NEET objective questions use the standard +4/−1
+  // scoring model; the field is therefore shown only for those patterns.
+  const supportsNegativeMarking = isCompetitive
+    && (competitiveExam === 'JEE Main' || competitiveExam === 'NEET')
+    && questionType !== 'subjective'
+    && questionType !== 'true_false';
+
+  useEffect(() => {
+    if (!supportsNegativeMarking) {
+      setNegativeMarks(0);
+      return;
+    }
+    setNegativeMarks((current) => current > 0 ? current : 1);
+  }, [supportsNegativeMarking]);
 
   const blueprintMissingRequirements = useMemo(() => {
     const missing: string[] = [];
@@ -660,7 +678,7 @@ export default function PaperGeneratorView({
   const noChapterDataForSubject = !taxonomyLoading && !taxonomyError && Boolean(pickerSubject) && availableTopics.length === 0;
 
   // Apply Blueprint Presets
-  const applyPreset = (preset: 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse') => {
+  const applyPreset = (preset: BlueprintPreset) => {
     if (preset === 'balanced') {
       setAssessmentTarget('school');
       setAssessmentType('chapter');
@@ -735,6 +753,7 @@ export default function PaperGeneratorView({
       setHardPct(10);
       setExamTitle(`CBSE Board Pattern Mock - ${selectedSubject}`);
     }
+    setSelectedPreset(preset);
     showToast(`Loaded ${preset.toUpperCase()} blueprint pattern.`);
   };
 
@@ -1610,7 +1629,7 @@ export default function PaperGeneratorView({
           {/* Preset selector */}
           <div className="presets-bar">
             <label className="presets-bar-label" htmlFor="paper-preset">1-click preset</label>
-            <select id="paper-preset" className="wizard-select preset-select" defaultValue="" onChange={(event) => { const preset = event.target.value; if (preset) applyPreset(preset as 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse'); event.currentTarget.value = ''; }}>
+            <select id="paper-preset" className="wizard-select preset-select" value={selectedPreset} onChange={(event) => { const preset = event.target.value as BlueprintPreset | ''; if (preset) applyPreset(preset); else setSelectedPreset(''); }}>
               <option value="" disabled>Choose a paper pattern…</option>
               <option value="balanced">⚡ Balanced — 25 Qs · 60 min</option>
               <option value="jee_main">🎯 JEE Main — 25 Qs · +4/−1</option>
@@ -1619,6 +1638,7 @@ export default function PaperGeneratorView({
               <option value="foundation">🌱 Foundation — 20 Qs</option>
               <option value="advanced">🔥 Advanced — 30 Qs</option>
             </select>
+            {selectedPreset && <span className="preset-applied-status" role="status"><CheckCircle2 size={15} /> Applied — you can still customise the blueprint below.</span>}
           </div>
 
           {/* Configuration Two-Column Grid */}
@@ -2062,26 +2082,33 @@ export default function PaperGeneratorView({
                   </div>
                 </div>
 
-                <div className="form-field">
-                  <label className="field-label">Marks / Correct</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={marksPerQuestion}
-                    onChange={(e) => setMarksPerQuestion(parseInt(e.target.value, 10) || 4)}
-                    className="wizard-input"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label className="field-label">Negative Marks</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={negativeMarks}
-                    onChange={(e) => setNegativeMarks(parseInt(e.target.value, 10) || 0)}
-                    className="wizard-input"
-                  />
+                <div className={`form-field full-col scoring-settings-card ${supportsNegativeMarking ? 'has-negative-marking' : ''}`}>
+                  <div className="scoring-settings-heading">
+                    <div><span>Scoring</span><b>{supportsNegativeMarking ? `+${marksPerQuestion} correct · −${negativeMarks} incorrect` : `+${marksPerQuestion} for each correct answer`}</b></div>
+                    {!supportsNegativeMarking && <small>No negative marking for this paper pattern</small>}
+                  </div>
+                  <div className="scoring-settings-grid">
+                    <label>
+                      <span>Marks per correct answer</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={marksPerQuestion}
+                        onChange={(e) => setMarksPerQuestion(parseInt(e.target.value, 10) || 4)}
+                        className="wizard-input"
+                      />
+                    </label>
+                    {supportsNegativeMarking && <label>
+                      <span>Negative marks per incorrect answer</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={negativeMarks}
+                        onChange={(e) => setNegativeMarks(parseInt(e.target.value, 10) || 0)}
+                        className="wizard-input"
+                      />
+                    </label>}
+                  </div>
                 </div>
 
                 <div className="form-field full-col blueprint-readonly-summary" role="status">
@@ -2339,7 +2366,7 @@ export default function PaperGeneratorView({
               </div>
               <div className="stat-pill">
                 <span className="stat-label">Max Marks:</span>
-                <span className="stat-value">{totalMarks} (+{marksPerQuestion}/-{negativeMarks})</span>
+                <span className="stat-value">{totalMarks} (+{marksPerQuestion}{negativeMarks > 0 ? `/-${negativeMarks}` : ''})</span>
               </div>
               <div className={`stat-pill reuse-summary-pill ${reusedQuestionCount ? 'has-reuse' : ''}`} title={reusedQuestionCount ? 'Open question cards to replace or remove reused questions.' : 'No questions in this paper were found in saved papers or exams.'}>
                 <span className="stat-label">Reuse check:</span>
