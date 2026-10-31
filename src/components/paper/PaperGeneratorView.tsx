@@ -334,11 +334,18 @@ export default function PaperGeneratorView({
       ? QUESTION_TYPE_OPTIONS.filter((item) => formats.includes(item.id))
       : QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id));
     const cbseMaths = !isCompetitive && selectedBoard === 'CBSE' && selectedSubjects.includes('Mathematics');
-    if (cbseMaths && !base.some((item) => item.id === 'numerical')) {
-      return [...base, QUESTION_TYPE_OPTIONS.find((item) => item.id === 'numerical')!];
+    const withCbseNumerical = cbseMaths && !base.some((item) => item.id === 'numerical')
+      ? [...base, QUESTION_TYPE_OPTIONS.find((item) => item.id === 'numerical')!]
+      : base;
+    // A taxonomy request can temporarily have no result while the teacher is
+    // switching subject/class. Keep their explicit Blueprint choice visible;
+    // do not quietly change MCQ-only into a mixed paper.
+    if (!withCbseNumerical.some((item) => item.id === questionType)) {
+      const selected = QUESTION_TYPE_OPTIONS.find((item) => item.id === questionType);
+      return selected ? [selected, ...withCbseNumerical] : withCbseNumerical;
     }
-    return base;
-  }, [assessmentRule.formats, availableQuestionTypes, isCompetitive, selectedBoard, selectedSubjects]);
+    return withCbseNumerical;
+  }, [assessmentRule.formats, availableQuestionTypes, isCompetitive, questionType, selectedBoard, selectedSubjects]);
 
   useEffect(() => {
     if (assessmentTarget !== 'school' || selectedBoard !== 'State board') return;
@@ -606,7 +613,9 @@ export default function PaperGeneratorView({
               QUESTION_TYPE_OPTIONS.some((option) => option.id === type),
             );
             setAvailableQuestionTypes(nextTypes.length ? nextTypes : ['all']);
-            if (!nextTypes.includes(questionType)) setQuestionType('all');
+            // Availability is informative only. The teacher-selected format is
+            // the source of truth for preview and generation. Falling back to
+            // "all" here caused MCQ-only blueprints to show mixed questions.
           }
           setShowAllTopics(false);
           const nextScope = `${selectedClass}|${selectedLang}`;
@@ -1680,6 +1689,32 @@ export default function PaperGeneratorView({
                   <span><b>{isCompetitive ? `${competitiveExam} rules` : `${activeBoardName} pattern`}</b>{assessmentRule.summary}</span>
                 </div>
 
+                <div className="blueprint-section-heading full-col"><span>Test settings</span><small>Duration is saved once here and follows this paper through every step.</small></div>
+                <div className="form-field full-col duration-setting-card">
+                  <div className="field-row-label"><label className="field-label">Class time / duration</label><span>{assessmentRule.locked ? 'Set by the selected exam pattern' : 'Choose a standard slot or enter a custom duration'}</span></div>
+                  {assessmentRule.locked ? (
+                    <>
+                      <input type="text" value={timeAllowed} className="wizard-input" disabled aria-describedby="rule-duration-help" />
+                      <small id="rule-duration-help" className="rule-lock-help">Locked by the selected assessment pattern</small>
+                    </>
+                  ) : (
+                    <div className="time-slot-control">
+                      <div className="time-slot-grid" role="group" aria-label="Choose class duration">
+                        {[
+                          ['60 Mins', '1 hour'],
+                          ['120 Mins', '2 hours'],
+                          ['180 Mins', '3 hours'],
+                        ].map(([value, label]) => (
+                          <button key={value} type="button" onClick={() => setTimeAllowed(value)} className={timeAllowed === value ? 'active' : ''}>{label}</button>
+                        ))}
+                      </div>
+                      <label className="custom-duration-field">Custom duration
+                        <input type="text" value={timeAllowed} onChange={(e) => setTimeAllowed(e.target.value)} placeholder="e.g. 45 Mins" className="wizard-input" />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
                 <div className="blueprint-section-heading full-col"><span>Paper composition</span><small>Set subjects, format, title and delivery settings.</small></div>
                 <div className="form-field full-col">
                   <div className="field-row-label">
@@ -1767,31 +1802,6 @@ export default function PaperGeneratorView({
                     <button type="button" className="paper-brand-save" onClick={() => void savePaperBrand()} disabled={paperBrandSaving}>{paperBrandSaving ? 'Saving identity…' : 'Save as my paper identity'}</button>
                   </div>
                   <small className="rule-lock-help">Your institute name, logo URL and watermark preference are saved to this teacher profile for the next paper.</small>
-                </div>
-
-                <div className="form-field full-col">
-                  <label className="field-label">Class time / duration</label>
-                  {assessmentRule.locked ? (
-                    <>
-                      <input type="text" value={timeAllowed} className="wizard-input" disabled aria-describedby="rule-duration-help" />
-                      <small id="rule-duration-help" className="rule-lock-help">Locked by the selected assessment pattern</small>
-                    </>
-                  ) : (
-                    <div className="time-slot-control">
-                      <div className="time-slot-grid" role="group" aria-label="Choose exam duration">
-                        {[
-                          ['60 Mins', '1 hour'],
-                          ['120 Mins', '2 hours'],
-                          ['180 Mins', '3 hours'],
-                        ].map(([value, label]) => (
-                          <button key={value} type="button" onClick={() => setTimeAllowed(value)} className={timeAllowed === value ? 'active' : ''}>{label}</button>
-                        ))}
-                      </div>
-                      <label className="custom-duration-field">Custom duration
-                        <input type="text" value={timeAllowed} onChange={(e) => setTimeAllowed(e.target.value)} placeholder="e.g. 45 Mins" className="wizard-input" />
-                      </label>
-                    </div>
-                  )}
                 </div>
 
                 <div className="form-field full-col">
@@ -1931,10 +1941,11 @@ export default function PaperGeneratorView({
                       <span>{replacementIndex !== null ? 'REPLACE QUESTION' : 'QUESTION PICKER'}</span>
                       <h4>{replacementIndex !== null ? `Choose a replacement for Question ${replacementIndex + 1}${previewTopic ? ` · ${previewTopic}` : ''}` : isCombinedPreview ? `Questions from ${topicSelections.length} selected chapters` : previewTopic ? `${pickerSubject} · ${previewTopic}` : 'Choose a chapter to inspect questions'}</h4>
                     </div>
-                    {hasPreviewScope && <div className="picker-type-filter-row" aria-label="Question format filters">
-                      {QUESTION_TYPE_OPTIONS.filter((item) => availableQuestionTypes.includes(item.id)).map((t) => (
-                        <button key={t.id} type="button" onClick={() => setQuestionType(t.id)} className={`picker-type-btn ${questionType === t.id ? 'active' : ''}`}>{t.shortLabel}</button>
-                      ))}
+                    {hasPreviewScope && <div className="picker-format-lock" role="status" aria-label="Question format selected in Blueprint">
+                      <span>FORMAT</span>
+                      <b>{QUESTION_TYPE_OPTIONS.find((item) => item.id === questionType)?.label || 'Mix All Types'}</b>
+                      <small>Set in Blueprint</small>
+                      <button type="button" onClick={() => setBuilderStep(1)}>Change</button>
                     </div>}
                     <div className="topic-preview-actions">
                       <div className="slots-inline-bar" title="Change target slots for this paper">
