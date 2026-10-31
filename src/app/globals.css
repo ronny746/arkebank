@@ -6968,6 +6968,15 @@ div.exam-list-card {
 .generation-error { display: flex; align-items: start; justify-content: space-between; gap: 14px; margin: 16px 0; padding: 13px 15px; border: 1px solid #F3B5B8; border-left: 4px solid #DC3545; border-radius: 10px; background: #FFF6F6; color: #8B1E2A; }
 .generation-error div { display: grid; gap: 3px; }.generation-error b { font-size: .88rem; }.generation-error span, .generation-error small { font-size: .79rem; line-height: 1.45; }.generation-error small { color: #9F3A43; }.generation-error button { flex: 0 0 auto; border: 0; color: #8B1E2A; background: transparent; font: inherit; font-size: .77rem; font-weight: 800; text-decoration: underline; cursor: pointer; }
 
+/* Paper-studio diagrams are source images, not page-sized artwork. Keep the
+   editor readable and reserve a stable viewing frame; clicking still opens the
+   existing full-size image viewer. */
+.question-card .q-diagram-container { display: flex; align-items: center; justify-content: center; inline-size: min(100%, 780px); block-size: clamp(170px, 23vw, 300px); max-inline-size: 100%; margin: 12px 0; overflow: hidden; border: 1px solid #DCE5EF; border-radius: 10px; background: #F8FAFC; }
+.question-card .diagram-image-preview { display: block; inline-size: 100%; block-size: 100%; max-inline-size: 100%; max-block-size: 100%; object-fit: contain; object-position: center; cursor: zoom-in; }
+.question-card .option-image-wrap { display: flex; align-items: center; justify-content: flex-start; inline-size: min(100%, 220px); block-size: 96px; margin-top: 7px; overflow: hidden; border: 1px solid #E2E8F0; border-radius: 7px; background: #F8FAFC; }
+.question-card .option-preview-img { display: block; inline-size: 100%; block-size: 100%; object-fit: contain; object-position: left center; cursor: zoom-in; }
+@media (max-width: 760px) { .question-card .q-diagram-container { block-size: 190px; margin: 9px 0; }.question-card .option-image-wrap { inline-size: min(100%, 180px); block-size: 82px; } }
+
 .paper-studio-source-tabs button {
   min-height: 37px;
   padding: 0 13px;

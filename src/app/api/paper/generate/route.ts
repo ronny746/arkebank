@@ -101,7 +101,14 @@ export async function POST(req: Request) {
     } else if (subject && subject !== 'all') {
       baseMatch.subject = subject;
     }
-    if (Array.isArray(topics) && topics.length > 0) {
+    const exactScopes = Array.isArray(scopes)
+      ? scopes.filter((scope: unknown): scope is { subject: string; topic: string } =>
+        Boolean(scope) && typeof (scope as { subject?: unknown }).subject === 'string' && typeof (scope as { topic?: unknown }).topic === 'string',
+      )
+      : [];
+    // A selected chapter is an explicit teacher instruction. Only fall back to
+    // the selected subject pool when no chapter/topic scope was selected.
+    if (!exactScopes.length && Array.isArray(topics) && topics.length > 0) {
       baseMatch.topic = { $in: topics };
     }
     if (lang && lang !== 'all') {
@@ -117,11 +124,6 @@ export async function POST(req: Request) {
       baseMatch.year = { $gt: 1990 };
     }
     Object.assign(baseMatch, withQuestionType(baseMatch, questionType));
-    const exactScopes = Array.isArray(scopes)
-      ? scopes.filter((scope: unknown): scope is { subject: string; topic: string } =>
-        Boolean(scope) && typeof (scope as { subject?: unknown }).subject === 'string' && typeof (scope as { topic?: unknown }).topic === 'string',
-      )
-      : [];
     if (exactScopes.length) {
       baseMatch.$and = [
         ...(Array.isArray(baseMatch.$and) ? baseMatch.$and : []),
@@ -139,14 +141,29 @@ export async function POST(req: Request) {
       if (excludeIds.length > 0) {
         tierMatch._id = { $nin: excludeIds };
       }
-
-      const pipeline = [
-        { $match: tierMatch },
-        { $sample: { size: count } },
-      ];
-
-      const sampled = await questionsCol.aggregate(pipeline).toArray();
-      return keepTeacherSafeQuestions(db, sampled);
+      // Teacher-safe filtering happens after retrieval. Sampling only exactly
+      // `count` records could therefore return 74/75 even when the database
+      // contains more valid questions. Sample a bounded surplus and retry a
+      // couple of times before reporting a genuine availability shortage.
+      const safe: any[] = [];
+      const seen = new Set<string>();
+      for (let attempt = 0; attempt < 3 && safe.length < count; attempt += 1) {
+        const needed = count - safe.length;
+        const pipeline = [
+          { $match: tierMatch },
+          { $sample: { size: Math.min(240, Math.max(needed * 3, 20)) } },
+        ];
+        const sampled = await questionsCol.aggregate(pipeline).toArray();
+        const safeSample = await keepTeacherSafeQuestions(db, sampled);
+        safeSample.forEach((doc) => {
+          const id = String(doc._id || doc.id);
+          if (!seen.has(id) && safe.length < count) {
+            seen.add(id);
+            safe.push(doc);
+          }
+        });
+      }
+      return safe;
     };
 
     const collectedIds = new Set<string>();
@@ -195,7 +212,7 @@ export async function POST(req: Request) {
     // Never backfill a missing difficulty with another level. A 100% Tough
     // request must never contain Easy/Moderate records merely to hit the count.
     const deficit = totalCount - allQuestions.length;
-    if (deficit > 0) {
+    if (deficit > 1) {
       return NextResponse.json({
         success: false,
         error: `Only ${allQuestions.length} of ${totalCount} questions match the requested difficulty distribution. Change the split, scope, or filters; no mixed-difficulty backfill was used.`,
@@ -216,6 +233,9 @@ export async function POST(req: Request) {
       success: true,
       totalGenerated: formattedQuestions.length,
       requestedCount: totalCount,
+      partial: deficit === 1,
+      warning: deficit === 1 ? `One matching question is not available for the exact difficulty split. ${formattedQuestions.length} matching questions are ready for review.` : undefined,
+      available: formattedQuestions.length,
       questions: formattedQuestions,
     });
   } catch (error: any) {

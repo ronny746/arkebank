@@ -1203,7 +1203,16 @@ export default function PaperGeneratorView({
         setPaperQuestions(previous => [...previous, ...additions]);
         setStudioTab('editor');
         setBuilderMode('edit');
-        showToast(`🎉 Added ${additions.length} generated questions. Your paper now has ${paperQuestions.length + additions.length}/${totalQuestions} questions.`);
+        if (data.partial) {
+          setGenerationError({
+            message: data.warning || 'One requested question is not available for the exact difficulty split. The available matching questions are ready for review.',
+            available: Number(data.available) || additions.length,
+            requested: totalQuestions,
+          });
+          showToast(`Added ${additions.length} matching questions. Review the paper and add the final slot manually if needed.`);
+        } else {
+          showToast(`🎉 Added ${additions.length} generated questions. Your paper now has ${paperQuestions.length + additions.length}/${totalQuestions} questions.`);
+        }
       } else {
         throw new Error('No questions found matching criteria.');
       }
