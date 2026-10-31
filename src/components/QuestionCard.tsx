@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   CheckCircle2, 
   ChevronDown, 
@@ -26,20 +26,43 @@ interface QuestionCardProps {
 }
 
 export default function QuestionCard({
-  question: q,
+  question,
   index,
   onImageZoom,
   onInspectTags,
   onEditTags,
 }: QuestionCardProps) {
+  const [q, setQuestion] = useState(question);
+  const [switchingLanguage, setSwitchingLanguage] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
+
+  useEffect(() => setQuestion(question), [question]);
+
+  const switchLanguage = async (targetLang: 'en' | 'hi') => {
+    if (String(q.lang || 'en').toLowerCase() === targetLang || switchingLanguage) return;
+    setSwitchingLanguage(true);
+    try {
+      const token = localStorage.getItem('arke_token');
+      const response = await fetch('/api/questions/switch-lang', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ questionId: q.id, targetLang, subject: q.subject, topic: q.topic, difficulty: q.difficulty }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.question) throw new Error(data.error || 'Translation is unavailable.');
+      setQuestion({ ...data.question, available_languages: q.available_languages });
+    } catch (error) {
+      console.warn('Question language switch failed', error);
+    } finally {
+      setSwitchingLanguage(false);
+    }
+  };
 
   const getDifficultyBadge = (diff: any) => {
     const val = String(diff);
-    if (val === '0') return <span className="badge badge-diff-basic">Basic (Tier 0)</span>;
+    if (val === '0') return <span className="badge badge-diff-basic">Easy (Tier 0)</span>;
     if (val === '1') return <span className="badge badge-diff-easy">Easy (Tier 1)</span>;
-    if (val === '2') return <span className="badge badge-diff-med">Medium (Tier 2)</span>;
-    if (val === '3') return <span className="badge badge-diff-hard">Hard (Tier 3)</span>;
+    if (val === '2') return <span className="badge badge-diff-med">Moderate (Tier 2)</span>;
+    if (val === '3') return <span className="badge badge-diff-hard">Tough (Tier 3)</span>;
     if (val === '4') return <span className="badge badge-diff-expert">Expert (Tier 4)</span>;
     return <span className="badge badge-diff-med">Standard</span>;
   };
@@ -92,7 +115,11 @@ export default function QuestionCard({
           {firstExamBadge && (
             <span className="badge badge-exam">{firstExamBadge}</span>
           )}
-          <span className="badge badge-lang">{q.lang ? String(q.lang).toUpperCase() : 'EN'}</span>
+          {Array.isArray(q.available_languages) && q.available_languages.length > 1 ? (
+            <span className="question-language-switch" aria-label="Question language">
+              {(['en', 'hi'] as const).filter((lang) => q.available_languages.includes(lang)).map((lang) => <button type="button" key={lang} className={String(q.lang || 'en').toLowerCase() === lang ? 'active' : ''} onClick={() => void switchLanguage(lang)} disabled={switchingLanguage}>{lang.toUpperCase()}</button>)}
+            </span>
+          ) : <span className="badge badge-lang">{q.lang ? String(q.lang).toUpperCase() : 'EN'}</span>}
         </div>
 
         <div className="card-right-actions">

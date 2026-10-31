@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { getTeacherVisibleQuestionIssue, keepTeacherSafeQuestions } from '@/lib/question-quality';
 
 export async function POST(req: Request) {
   try {
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
     const updatedQuestions = await Promise.all(
       questions.map(async (q: any) => {
         // If already in target language, keep it
-        if (q.lang === targetLang) return q;
+        if (q.lang === targetLang) return getTeacherVisibleQuestionIssue(q) ? null : q;
 
         const numId = Number(q.id);
         let match = null;
@@ -56,38 +57,45 @@ export async function POST(req: Request) {
           return { ...q, lang: targetLang };
         }
 
+        const [safeMatch] = await keepTeacherSafeQuestions(db, [match]);
+        if (!safeMatch) return null;
+
         return {
-          _id: match._id ? String(match._id) : `${match.id}_${targetLang}`,
-          id: match.id,
-          pyq_id: match.pyq_id || 0,
-          lang: match.lang || targetLang,
-          class_std: match.class_std || q.class_std,
-          subject: match.subject || q.subject,
-          subject_id: match.subject_id || q.subject_id,
-          topic: match.topic || q.topic,
-          topic_id: match.topic_id || q.topic_id,
-          sub_topic: match.sub_topic || q.sub_topic,
-          sub_topic_id: match.sub_topic_id || q.sub_topic_id,
-          difficulty: match.difficulty || q.difficulty,
-          year: match.year || q.year,
-          paper: match.paper || q.paper,
-          question_exams: match.question_exams || q.question_exams || [],
-          question: match.question,
-          question_image: match.question_image || '',
-          options: match.options || [],
-          correct_option: match.correct_option,
-          correct_answer: match.correct_answer,
-          solution: match.solution || '',
-          solution_image: match.solution_image || '',
+          _id: safeMatch._id ? String(safeMatch._id) : `${safeMatch.id}_${targetLang}`,
+          id: safeMatch.id,
+          pyq_id: safeMatch.pyq_id || 0,
+          lang: safeMatch.lang || targetLang,
+          class_std: safeMatch.class_std || q.class_std,
+          subject: safeMatch.subject || q.subject,
+          subject_id: safeMatch.subject_id || q.subject_id,
+          topic: safeMatch.topic || q.topic,
+          topic_id: safeMatch.topic_id || q.topic_id,
+          sub_topic: safeMatch.sub_topic || q.sub_topic,
+          sub_topic_id: safeMatch.sub_topic_id || q.sub_topic_id,
+          difficulty: safeMatch.difficulty || q.difficulty,
+          year: safeMatch.year || q.year,
+          paper: safeMatch.paper || q.paper,
+          question_exams: safeMatch.question_exams || q.question_exams || [],
+          question: safeMatch.question,
+          question_image: safeMatch.question_image || '',
+          options: safeMatch.options || [],
+          correct_option: safeMatch.correct_option,
+          correct_answer: safeMatch.correct_answer,
+          solution: safeMatch.solution || '',
+          solution_image: safeMatch.solution_image || '',
           marks: q.marks || 4,
           negative_marks: q.negative_marks || 1,
         };
       })
     );
 
+    const visibleQuestions = updatedQuestions.filter(Boolean);
+    if (visibleQuestions.length !== questions.length) {
+      return NextResponse.json({ success: false, error: 'One or more translated questions need admin formatting review.' }, { status: 422 });
+    }
     return NextResponse.json({
       success: true,
-      questions: updatedQuestions,
+      questions: visibleQuestions,
     });
   } catch (error: any) {
     console.error('paper switch-lang error:', error);

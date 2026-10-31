@@ -17,8 +17,8 @@ interface AiPaperStudioViewProps {
 }
 
 const DEFAULT_SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'Science', 'English', 'Reasoning'];
-const DEFAULT_CLASSES = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'JEE Main', 'JEE Advanced', 'NEET'];
-const SCHOOL_CLASS_OPTIONS = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
+const DEFAULT_CLASSES = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12', 'JEE Main', 'JEE Advanced', 'NEET'];
+const SCHOOL_CLASS_OPTIONS = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
 const EXAM_SUBJECTS: Record<string, string[]> = {
   'JEE Main': ['Physics', 'Chemistry', 'Mathematics'],
   'JEE Advanced': ['Physics', 'Chemistry', 'Mathematics'],
@@ -49,6 +49,10 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
   const [marks, setMarks] = useState(4);
   const [negativeMarks, setNegativeMarks] = useState(1);
   const [title, setTitle] = useState('AI Practice Assessment');
+  const [instituteName, setInstituteName] = useState(tenant.paperInstituteName);
+  const [instituteLogoUrl, setInstituteLogoUrl] = useState('');
+  const [watermarkText, setWatermarkText] = useState(tenant.portalName);
+  const [showWatermark, setShowWatermark] = useState(true);
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -63,6 +67,22 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
     document.addEventListener('mousedown', closeMenu);
     return () => document.removeEventListener('mousedown', closeMenu);
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const token = localStorage.getItem('arke_token');
+    void fetch('/api/profile/paper-brand', { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include', signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data.profile || controller.signal.aborted) return;
+        const profile = data.profile as { instituteName?: string; logoUrl?: string; watermarkText?: string; showWatermark?: boolean };
+        if (profile.instituteName) setInstituteName(profile.instituteName);
+        setInstituteLogoUrl(profile.logoUrl || '');
+        setWatermarkText(profile.watermarkText || tenant.portalName);
+        setShowWatermark(profile.showWatermark !== false);
+      }).catch(() => undefined);
+    return () => controller.abort();
+  }, [tenant.portalName]);
 
   const selectTargetExam = (nextTarget: string) => {
     setTargetExam(nextTarget);
@@ -141,7 +161,7 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
         body: JSON.stringify({
           id: `ai_paper_${Date.now()}`,
           title,
-          instituteName: tenant.paperInstituteName,
+          instituteName,
           class_std: classStd,
           subject: targetExam || subjects.join(' + '),
           timeAllowed: `${Math.max(10, count * 2)} Mins`,
@@ -153,11 +173,11 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
           aiProvider: 'anthropic',
           createdAt: new Date().toISOString(),
           brandName: tenant.portalName,
-          brandLogoSrc: tenant.logoSrc,
+          brandLogoSrc: instituteLogoUrl || tenant.logoSrc,
           brandLogoWidth: tenant.logoWidth,
           brandLogoHeight: tenant.logoHeight,
-          watermarkText: tenant.portalName,
-          showWatermark: true,
+          watermarkText: watermarkText || tenant.portalName,
+          showWatermark,
           footerText: tenant.paperFooterText,
         }),
       });
@@ -173,17 +193,17 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
 
   const metadata: PaperMetadata = {
     title,
-    instituteName: tenant.paperInstituteName,
+    instituteName,
     class_std: classStd,
     subject: targetExam || subjects.join(' + '),
     subjectLabel: targetExam ? 'Target Exam:' : 'Subject:',
     timeAllowed: `${Math.max(10, questions.length * 2)} Mins`,
     totalMarks: questions.reduce((total, question) => total + (Number(question.marks) || marks), 0),
     instructions: ['All questions are compulsory.', `Each question carries ${marks} marks.`, 'AI-generated content has been reviewed by faculty.'],
-    watermarkText: tenant.portalName,
-    showWatermark: true,
+    watermarkText: watermarkText || tenant.portalName,
+    showWatermark,
     brandName: tenant.portalName,
-    brandLogoSrc: tenant.logoSrc,
+    brandLogoSrc: instituteLogoUrl || tenant.logoSrc,
     brandLogoWidth: tenant.logoWidth,
     brandLogoHeight: tenant.logoHeight,
     footerText: tenant.paperFooterText,
@@ -210,13 +230,14 @@ export default function AiPaperStudioView({ classesList, subjectsList, showToast
             <label className="ai-full-field">Topics <small>Optional — add multiple with commas</small><input list="ai-topic-suggestions" value={topicText} onChange={(event) => setTopicText(event.target.value)} placeholder="e.g. Thermodynamics, Current electricity" /><datalist id="ai-topic-suggestions"><option value="Thermodynamics" /><option value="Current Electricity" /><option value="Chemical bonding" /><option value="Human physiology" /></datalist></label>
             <label className="ai-full-field">Sub-topics <small>Optional — add multiple with commas</small><input list="ai-subtopic-suggestions" value={subTopicText} onChange={(event) => setSubTopicText(event.target.value)} placeholder="e.g. Laws of thermodynamics, AC circuits" /><datalist id="ai-subtopic-suggestions"><option value="Laws of thermodynamics" /><option value="AC circuits" /><option value="Numericals" /><option value="Diagram-based questions" /></datalist></label>
             <label>Question format<select value={format} onChange={(event) => setFormat(event.target.value as QuestionFormat)}><option value="mcq">MCQ</option><option value="subjective">Subjective / Theory</option><option value="numerical">Numerical</option><option value="true_false">True / False</option></select></label>
-            <label>Difficulty<select value={difficulty} onChange={(event) => setDifficulty(event.target.value as Difficulty)}><option value="mixed">Balanced mix</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
+            <label>Difficulty<select value={difficulty} onChange={(event) => setDifficulty(event.target.value as Difficulty)}><option value="mixed">Balanced mix</option><option value="easy">Easy (Tier 0–1)</option><option value="medium">Moderate (Tier 2)</option><option value="hard">Tough (Tier 3–4)</option></select></label>
             <label>Language<select value={language} onChange={(event) => setLanguage(event.target.value as 'en' | 'hi')}><option value="en">English</option><option value="hi">Hindi</option></select></label>
             <label>Teaching diagrams<select value={includeDiagrams ? 'yes' : 'no'} onChange={(event) => { const enabled = event.target.value === 'yes'; setIncludeDiagrams(enabled); if (enabled) setCount((current) => Math.min(current, 5)); }}><option value="no">Text only</option><option value="yes">Include SVG diagrams (max 5)</option></select></label>
             <label>Questions <small>{includeDiagrams ? 'Diagram batches are limited to 5 for reliable generation' : 'Up to 25 per batch'}</small><input type="number" min="1" max={includeDiagrams ? 5 : 25} value={count} onChange={(event) => setCount(Math.max(1, Math.min(includeDiagrams ? 5 : 25, Number(event.target.value) || 1)))} /></label>
             <label>Marks / question<input type="number" min="1" max="20" value={marks} onChange={(event) => setMarks(Math.max(1, Number(event.target.value) || 1))} /></label>
             <label>Negative marks<input type="number" min="0" max="10" step="0.25" value={negativeMarks} onChange={(event) => setNegativeMarks(Math.max(0, Number(event.target.value) || 0))} /></label>
             <label className="ai-full-field">Paper title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+            <label className="ai-full-field ai-watermark-choice"><input type="checkbox" checked={showWatermark} onChange={(event) => setShowWatermark(event.target.checked)} /> Include watermark on this paper {showWatermark && <input value={watermarkText} onChange={(event) => setWatermarkText(event.target.value)} aria-label="Watermark text" placeholder={tenant.portalName} />}</label>
           </div>
           <button className="ai-generate-button" type="submit" disabled={generating || !subjects.length}><Sparkles size={17} />{generating ? 'Claude is drafting questions…' : `Generate ${count} original questions`}</button>
           <p className="ai-form-footnote">{includeDiagrams ? 'Each diagram is self-contained. Check labels and accuracy before publishing.' : 'AI output must be reviewed by faculty before publishing to students.'}</p>

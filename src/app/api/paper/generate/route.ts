@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { withQuestionType } from '@/lib/question-types';
+import { keepTeacherSafeQuestions } from '@/lib/question-quality';
 
 export async function POST(req: Request) {
   try {
@@ -41,16 +42,14 @@ export async function POST(req: Request) {
     const requestedSubjects = Array.isArray(subjects) && subjects.length
       ? subjects.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim()))
       : (subject && subject !== 'all' ? [subject] : []);
-    // A JEE Advanced combined paper is a PCM paper by definition. Enforce the
-    // same scope server-side so a stale client or crafted request cannot make
-    // an incomplete one-subject "Advanced" paper.
-    const subjectList = competitive && competitiveExam === 'JEE Advanced' && ['part', 'full'].includes(assessmentType)
-      ? ['Physics', 'Chemistry', 'Mathematics']
-      : requestedSubjects;
+    // PCM is preselected for JEE Advanced in the blueprint, but a faculty
+    // member may deliberately tailor the bank paper to a subset. Respect the
+    // submitted subject scope instead of restoring deselected subjects.
+    const subjectList = requestedSubjects;
     const selectedSubject = subjectList[0] || subject;
     const derivedCount = (() => {
       if (!competitive) return assessmentType === 'full' ? 50 : null;
-      if (assessmentType === 'full') return competitiveExam === 'NEET' ? 180 : competitiveExam === 'JEE Advanced' ? 54 : 75;
+      if (assessmentType === 'full') return competitiveExam === 'NEET' ? 180 : competitiveExam === 'JEE Advanced' ? 18 * Math.max(1, subjectList.length) : 75;
       if (assessmentType === 'chapter') return competitiveExam === 'NEET' ? (selectedSubject === 'Biology' ? 90 : 45) : competitiveExam === 'JEE Advanced' ? 18 : 25;
       if (competitiveExam === 'NEET') return subjectList.reduce((sum: number, item: string) => sum + (item === 'Biology' ? 90 : 45), 0);
       return (competitiveExam === 'JEE Advanced' ? 18 : 25) * Math.max(1, subjectList.length);
@@ -139,7 +138,8 @@ export async function POST(req: Request) {
         { $sample: { size: count } },
       ];
 
-      return await questionsCol.aggregate(pipeline).toArray();
+      const sampled = await questionsCol.aggregate(pipeline).toArray();
+      return keepTeacherSafeQuestions(db, sampled);
     };
 
     const collectedIds = new Set<string>();
@@ -157,7 +157,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Medium Questions (Tier 2)
+    // 2. Moderate Questions (Tier 2)
     if (medTarget > 0) {
       const medDocs = await sampleTier({ $in: ['2', 2] }, medTarget, Array.from(collectedIds));
       medDocs.forEach((doc) => {
@@ -169,9 +169,13 @@ export async function POST(req: Request) {
       });
     }
 
-    // 3. Hard Questions (Tier 3 only). Tier 4 is Expert, not Hard.
+    // 3. Tough Questions. Standard/Advanced papers may use Tier 3–4;
+    // JEE Main and NEET deliberately stop at Tier 3 (no Expert tier).
     if (hardTarget > 0) {
-      const hardDocs = await sampleTier({ $in: ['3', 3] }, hardTarget, Array.from(collectedIds));
+      const toughTiers = competitive && ['JEE Main', 'NEET'].includes(competitiveExam)
+        ? ['3', 3]
+        : ['3', '4', 3, 4];
+      const hardDocs = await sampleTier({ $in: toughTiers }, hardTarget, Array.from(collectedIds));
       hardDocs.forEach((doc) => {
         const idStr = String(doc._id || doc.id);
         if (!collectedIds.has(idStr)) {
@@ -181,8 +185,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // Never backfill a missing difficulty with another level. A 100% Hard
-    // request must never contain easy/medium records merely to hit the count.
+    // Never backfill a missing difficulty with another level. A 100% Tough
+    // request must never contain Easy/Moderate records merely to hit the count.
     const deficit = totalCount - allQuestions.length;
     if (deficit > 0) {
       return NextResponse.json({

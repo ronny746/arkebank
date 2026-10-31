@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import Image from 'next/image';
 import { QuestionItem, PaperMetadata } from '@/types/paper';
 import MathRenderer from '../MathRenderer';
 
@@ -84,12 +83,11 @@ export default function PaperPrintableDocument({
       <div className="paper-exam-header">
         <div className="header-top-row">
           <div className="exam-logo-box">
-            <Image
+            <img
               src={brandLogoSrc}
               alt={`${brandName} logo`}
-              width={logoWidth}
-              height={logoHeight}
               className="paper-header-logo"
+              style={{ width: logoWidth, height: logoHeight }}
             />
           </div>
           <div className="exam-titles-box">

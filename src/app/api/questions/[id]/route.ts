@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { getTeacherVisibleQuestionIssue, keepTeacherSafeQuestions } from '@/lib/question-quality';
 
 export async function GET(
   req: Request,
@@ -16,6 +17,10 @@ export async function GET(
       : { $or: [{ _id: id }, { id: numericId }] };
     const question = await db.collection('questions').findOne(filter);
     if (!question) return NextResponse.json({ success: false, error: 'Question not found.' }, { status: 404 });
+    if (getTeacherVisibleQuestionIssue(question)) {
+      await keepTeacherSafeQuestions(db, [question]);
+      return NextResponse.json({ success: false, error: 'This question is hidden because its source formatting needs administrator review.' }, { status: 422 });
+    }
     return NextResponse.json({ success: true, question });
   } catch (error) {
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Could not load question.' }, { status: 500 });

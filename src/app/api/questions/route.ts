@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { withQuestionType } from '@/lib/question-types';
+import { keepTeacherSafeQuestions } from '@/lib/question-quality';
 
 export async function GET(req: Request) {
   try {
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
     const topic = searchParams.get('topic');
     const sub_topic = searchParams.get('sub_topic');
     const difficulty = searchParams.get('difficulty');
+    const max_difficulty = Number.parseInt(searchParams.get('max_difficulty') || '', 10);
     const lang = searchParams.get('lang');
     const year = searchParams.get('year');
     const exam = searchParams.get('exam');
@@ -73,6 +75,8 @@ export async function GET(req: Request) {
     }
     if (difficulty && difficulty !== 'all') {
       query.difficulty = difficulty;
+    } else if (Number.isInteger(max_difficulty) && max_difficulty >= 0 && max_difficulty <= 4) {
+      query.difficulty = { $in: Array.from({ length: max_difficulty + 1 }, (_, tier) => [String(tier), tier]).flat() };
     }
     if (lang && lang !== 'all') {
       query.lang = lang;
@@ -146,7 +150,24 @@ export async function GET(req: Request) {
 
     const [total, resultQuestions] = await Promise.all([countPromise, questionsPromise]);
     const hasMore = cursorMode && resultQuestions.length > limit;
-    const questions = cursorMode ? resultQuestions.slice(0, limit) : resultQuestions;
+    const safeQuestions = await keepTeacherSafeQuestions(db, (cursorMode ? resultQuestions.slice(0, limit) : resultQuestions));
+    // English/Hindi translations are separate source rows but one teaching
+    // question. Keep one canonical card and expose a language switch instead
+    // of making faculty see duplicate questions in the bank.
+    const questions = lang === 'all'
+      ? [...safeQuestions.reduce((byId, candidate: any) => {
+          const key = String(candidate.id || candidate._id);
+          const current = byId.get(key);
+          if (!current || (String(candidate.lang).toLowerCase() === 'en' && String(current.lang).toLowerCase() !== 'en')) byId.set(key, candidate);
+          return byId;
+        }, new Map<string, any>()).values()]
+      : safeQuestions;
+    const numericIds = questions.map((question: any) => Number(question.id)).filter(Number.isFinite);
+    const languageRows = numericIds.length
+      ? await questionsCol.aggregate([{ $match: { id: { $in: numericIds }, lang: { $in: ['en', 'hi'] } } }, { $group: { _id: '$id', languages: { $addToSet: '$lang' } } }]).toArray()
+      : [];
+    const languagesById = new Map(languageRows.map((row: any) => [String(row._id), (row.languages || []).sort()]));
+    questions.forEach((question: any) => { question.available_languages = languagesById.get(String(question.id)) || [question.lang || 'en']; });
     const lastQuestion = questions[questions.length - 1] as { id?: number; _id?: unknown } | undefined;
     const nextCursor = hasMore && lastQuestion
       ? Buffer.from(JSON.stringify({ id: lastQuestion.id, recordId: String(lastQuestion._id) })).toString('base64url')

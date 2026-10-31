@@ -588,10 +588,10 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
                       All
                     </button>
                     {[
-                      { value: '0', label: 'Tier 0 (Basic)' },
+                      { value: '0', label: 'Tier 0 (Easy)' },
                       { value: '1', label: 'Tier 1 (Easy)' },
-                      { value: '2', label: 'Tier 2 (Medium)' },
-                      { value: '3', label: 'Tier 3 (Hard)' },
+                      { value: '2', label: 'Tier 2 (Moderate)' },
+                      { value: '3', label: 'Tier 3 (Tough)' },
                       { value: '4', label: 'Tier 4 (Expert)' },
                     ].map((diff) => (
                       <button

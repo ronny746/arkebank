@@ -51,8 +51,11 @@ export async function GET(req: Request) {
       const dynamicClasses = (withQuestions
         ? await questionsCol.distinct('class_std', classQuestionScope)
         : await syllabusCol.distinct('class_std')).filter(Boolean);
-      const standardPriority = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'JM', 'JA', 'NEET', 'Competitive Exam'];
-      const sortedClasses = dynamicClasses.sort((a, b) => {
+      const standardPriority = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12', 'JM', 'JA', 'NEET', 'Competitive Exam'];
+      // Foundation classes stay selectable before their first content batch is
+      // ingested, so the data team does not need a UI deployment to activate
+      // Class 6–8 content later.
+      const sortedClasses = Array.from(new Set([...standardPriority, ...dynamicClasses])).sort((a, b) => {
         const idxA = standardPriority.indexOf(a);
         const idxB = standardPriority.indexOf(b);
         if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -193,10 +196,10 @@ export async function GET(req: Request) {
         totalQuestions,
         difficulties: [
           { value: 'all', label: 'All Difficulties' },
-          { value: '0', label: 'Tier 0 - Basic' },
+          { value: '0', label: 'Tier 0 - Easy' },
           { value: '1', label: 'Tier 1 - Easy' },
-          { value: '2', label: 'Tier 2 - Medium' },
-          { value: '3', label: 'Tier 3 - Hard' },
+          { value: '2', label: 'Tier 2 - Moderate' },
+          { value: '3', label: 'Tier 3 - Tough' },
           { value: '4', label: 'Tier 4 - Expert' },
         ],
       };

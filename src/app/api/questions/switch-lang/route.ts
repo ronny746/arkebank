@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { keepTeacherSafeQuestions } from '@/lib/question-quality';
 
 export async function POST(req: Request) {
   try {
@@ -59,31 +60,36 @@ export async function POST(req: Request) {
       );
     }
 
+    const [safeQuestion] = await keepTeacherSafeQuestions(db, [matchedDoc]);
+    if (!safeQuestion) {
+      return NextResponse.json({ success: false, error: 'This question needs admin formatting review before it can be shown.' }, { status: 422 });
+    }
+
     return NextResponse.json({
       success: true,
       question: {
-        _id: matchedDoc._id ? String(matchedDoc._id) : `${matchedDoc.id}_${targetLang}`,
-        id: matchedDoc.id,
-        pyq_id: matchedDoc.pyq_id || 0,
-        lang: matchedDoc.lang || targetLang,
-        class_std: matchedDoc.class_std,
-        subject: matchedDoc.subject,
-        subject_id: matchedDoc.subject_id,
-        topic: matchedDoc.topic,
-        topic_id: matchedDoc.topic_id,
-        sub_topic: matchedDoc.sub_topic,
-        sub_topic_id: matchedDoc.sub_topic_id,
-        difficulty: matchedDoc.difficulty,
-        year: matchedDoc.year,
-        paper: matchedDoc.paper,
-        question_exams: matchedDoc.question_exams || [],
-        question: matchedDoc.question,
-        question_image: matchedDoc.question_image || '',
-        options: matchedDoc.options || [],
-        correct_option: matchedDoc.correct_option,
-        correct_answer: matchedDoc.correct_answer,
-        solution: matchedDoc.solution || '',
-        solution_image: matchedDoc.solution_image || '',
+        _id: safeQuestion._id ? String(safeQuestion._id) : `${safeQuestion.id}_${targetLang}`,
+        id: safeQuestion.id,
+        pyq_id: safeQuestion.pyq_id || 0,
+        lang: safeQuestion.lang || targetLang,
+        class_std: safeQuestion.class_std,
+        subject: safeQuestion.subject,
+        subject_id: safeQuestion.subject_id,
+        topic: safeQuestion.topic,
+        topic_id: safeQuestion.topic_id,
+        sub_topic: safeQuestion.sub_topic,
+        sub_topic_id: safeQuestion.sub_topic_id,
+        difficulty: safeQuestion.difficulty,
+        year: safeQuestion.year,
+        paper: safeQuestion.paper,
+        question_exams: safeQuestion.question_exams || [],
+        question: safeQuestion.question,
+        question_image: safeQuestion.question_image || '',
+        options: safeQuestion.options || [],
+        correct_option: safeQuestion.correct_option,
+        correct_answer: safeQuestion.correct_answer,
+        solution: safeQuestion.solution || '',
+        solution_image: safeQuestion.solution_image || '',
         marks: body.marks || 4,
         negative_marks: body.negative_marks || 1,
       },

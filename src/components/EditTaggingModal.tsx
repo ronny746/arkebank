@@ -16,7 +16,7 @@ export default function EditTaggingModal({
   question,
   onClose,
   onSaved,
-  availableClasses = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'JM', 'JA', 'NEET', 'Competitive Exam'],
+  availableClasses = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12', 'JM', 'JA', 'NEET', 'Competitive Exam'],
   availableSubjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'Science', 'Reasoning', 'Quantitative Aptitude', 'Verbal']
 }: EditTaggingModalProps) {
   if (!question) return null;
@@ -118,10 +118,10 @@ export default function EditTaggingModal({
   };
 
   const diffTiers = [
-    { val: '0', label: 'Basic', badge: 'Tier 0' },
+    { val: '0', label: 'Easy', badge: 'Tier 0' },
     { val: '1', label: 'Easy', badge: 'Tier 1' },
-    { val: '2', label: 'Medium', badge: 'Tier 2' },
-    { val: '3', label: 'Hard', badge: 'Tier 3' },
+    { val: '2', label: 'Moderate', badge: 'Tier 2' },
+    { val: '3', label: 'Tough', badge: 'Tier 3' },
     { val: '4', label: 'Expert', badge: 'Tier 4' },
   ];
 

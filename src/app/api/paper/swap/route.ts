@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
+import { keepTeacherSafeQuestions } from '@/lib/question-quality';
 
 export async function POST(req: Request) {
   try {
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
     const replacement = await questionsCol
       .aggregate([
         { $match: matchQuery },
-        { $sample: { size: 1 } },
+        { $sample: { size: 8 } },
       ])
       .toArray();
 
@@ -64,15 +65,24 @@ export async function POST(req: Request) {
         );
       }
 
+      const safeFallback = await keepTeacherSafeQuestions(db, fallback);
+      if (!safeFallback.length) {
+        return NextResponse.json({ success: false, error: 'Matching alternate questions need an admin formatting review.' }, { status: 422 });
+      }
       return NextResponse.json({
         success: true,
-        question: fallback[0],
+        question: safeFallback[0],
       });
+    }
+
+    const safeReplacement = await keepTeacherSafeQuestions(db, replacement);
+    if (!safeReplacement.length) {
+      return NextResponse.json({ success: false, error: 'Matching alternate questions need an admin formatting review.' }, { status: 422 });
     }
 
     return NextResponse.json({
       success: true,
-      question: replacement[0],
+      question: safeReplacement[0],
     });
   } catch (error: any) {
     console.error('Swap Question Error:', error);
