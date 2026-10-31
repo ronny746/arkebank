@@ -41,6 +41,7 @@ export async function GET(req: Request) {
     const skip = (page - 1) * limit;
 
     const class_std = searchParams.get('class_std');
+    const format_scope = searchParams.get('format_scope');
     const subject = searchParams.get('subject');
     const topic = searchParams.get('topic');
     const sub_topic = searchParams.get('sub_topic');
@@ -59,8 +60,16 @@ export async function GET(req: Request) {
 
     const query: any = {};
 
+    const isCompetitiveAssessment = format_scope === 'assessment'
+      && ['JA', 'JM', 'NEET', 'JEE Main', 'JEE Advanced', 'Competitive Exam'].includes(class_std || '');
+
     if (class_std && class_std !== 'all') {
-      query.class_std = class_std;
+      // Competitive papers are configured by exam, while their source questions
+      // are commonly stored under Class 11 / Class 12. Keep the exam value in
+      // the allowed set, but never exclude those source records from preview.
+      query.class_std = isCompetitiveAssessment
+        ? { $in: [...new Set([class_std, 'Class 11', 'Class 12'])] }
+        : class_std;
     }
     if (subject && subject !== 'all') {
       query.subject = subject;
