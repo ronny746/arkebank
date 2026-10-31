@@ -11,7 +11,7 @@ import MathRenderer from '../MathRenderer';
 import PaperPrintableDocument from './PaperPrintableDocument';
 import AiPaperStudioView from './AiPaperStudioView';
 import ExamCreatorModal from '../exams/ExamCreatorModal';
-import { QUESTION_TYPE_OPTIONS, type QuestionType } from '@/lib/question-types';
+import { QUESTION_TYPE_OPTIONS, resolveQuestionNegativeMarks, type QuestionType } from '@/lib/question-types';
 import type { TenantBrand } from '@/lib/tenant';
 import { 
   Sparkles, 
@@ -223,6 +223,7 @@ export default function PaperGeneratorView({
   // JEE Advanced starts with the PCM scope selected, but faculty can tailor
   // the question-bank paper to a smaller subject scope when needed.
   const isJeeAdvancedPlan = isMultiSubjectExam && isCompetitive && competitiveExam === 'JEE Advanced';
+  const hasLockedFullSyllabusSubjects = isCompetitive && assessmentType === 'full' && competitiveExam !== 'JEE Advanced';
   const minimumSubjectsForPart = 1;
   const selectedTopics = useMemo(
     () => [...new Set(topicSelections.map((selection) => selection.topic))],
@@ -256,17 +257,30 @@ export default function PaperGeneratorView({
   // (including a hot refresh). Initialise it once per assessment/class/type;
   // later teacher removals remain respected.
   useEffect(() => {
-    if (!isMultiSubjectExam || eligibleSubjects.length < 2) return;
+    if (!isMultiSubjectExam || eligibleSubjects.length < 1) return;
     const planKey = `${assessmentTarget}|${competitiveExam}|${selectedClass}|${assessmentType}`;
+    const shouldStartWithAllSubjects = isCompetitive || assessmentType === 'part';
+    const initialSubjects = hasLockedFullSyllabusSubjects || shouldStartWithAllSubjects
+      ? eligibleSubjects
+      : eligibleSubjects.slice(0, 1);
+    const lockedScopeNeedsSync = hasLockedFullSyllabusSubjects && (
+      selectedSubjects.length !== initialSubjects.length || initialSubjects.some((subject) => !selectedSubjects.includes(subject))
+    );
+    if (lockedScopeNeedsSync) {
+      setSelectedSubjects(initialSubjects);
+      setSelectedSubject(initialSubjects[0]);
+      setPickerSubject(initialSubjects[0]);
+      return;
+    }
     if (multiSubjectPlanInitializedRef.current === planKey) return;
     multiSubjectPlanInitializedRef.current = planKey;
     hasSubjectSelectionBeenEditedRef.current = false;
-    if (selectedSubjects.length < 2) {
-      setSelectedSubjects(eligibleSubjects);
-      setSelectedSubject(eligibleSubjects[0]);
-      setPickerSubject(eligibleSubjects[0]);
+    if (initialSubjects.length && selectedSubjects.length === 0) {
+      setSelectedSubjects(initialSubjects);
+      setSelectedSubject(initialSubjects[0]);
+      setPickerSubject(initialSubjects[0]);
     }
-  }, [assessmentTarget, assessmentType, competitiveExam, eligibleSubjects, isMultiSubjectExam, selectedClass, selectedSubjects.length]);
+  }, [assessmentTarget, assessmentType, competitiveExam, eligibleSubjects, hasLockedFullSyllabusSubjects, isCompetitive, isMultiSubjectExam, selectedClass, selectedSubjects.length]);
 
   const assessmentRule = useMemo(() => {
     if (!isCompetitive) {
@@ -289,7 +303,8 @@ export default function PaperGeneratorView({
       const fullSummary = competitiveExam === 'JEE Advanced'
         ? `JEE Advanced full syllabus: 3 hours. PCM is selected by default; tailor the subject scope if required.`
         : `${competitiveExam} full syllabus: 3 hours and the official pattern are fixed.`;
-      return { locked: true, duration: '180 Mins', count: fullCount, formats: COMPETITIVE_FORMATS[competitiveExam], summary: fullSummary };
+      const fullFormats: QuestionType[] = competitiveExam === 'NEET' ? ['mcq'] : competitiveExam === 'JEE Main' ? ['all'] : COMPETITIVE_FORMATS[competitiveExam];
+      return { locked: true, duration: '180 Mins', count: fullCount, formats: fullFormats, summary: fullSummary };
     }
     if (assessmentType === 'chapter') {
       const chapterCount = competitiveExam === 'NEET'
@@ -415,7 +430,7 @@ export default function PaperGeneratorView({
     if (!assessmentRule.locked) return;
     if (assessmentRule.duration) setTimeAllowed(assessmentRule.duration);
     if (assessmentRule.count) setTotalQuestions(assessmentRule.count);
-    if (assessmentRule.formats && !assessmentRule.formats.includes(questionType)) setQuestionType('all');
+    if (assessmentRule.formats && !assessmentRule.formats.includes(questionType)) setQuestionType(assessmentRule.formats[0]);
   }, [assessmentRule, questionType]);
 
   const selectCompetitiveExam = (exam: CompetitiveExam) => {
@@ -452,13 +467,14 @@ export default function PaperGeneratorView({
     setAssessmentType(type);
     if (type !== 'part' && type !== 'full') return;
 
-    // Combined assessments begin with every usable subject for the selected
-    // class. The teacher can remove any non-required subject afterwards.
+    // Part tests begin broad; a school full-syllabus paper starts with one
+    // subject so it never silently turns into an all-subject paper.
     const combinedSubjects = eligibleSubjects.length ? eligibleSubjects : selectedSubjects;
     if (!combinedSubjects.length) return;
-    setSelectedSubjects(combinedSubjects);
-    setSelectedSubject(combinedSubjects[0]);
-    setPickerSubject(combinedSubjects[0]);
+    const nextSubjects = isCompetitive || type === 'part' ? combinedSubjects : combinedSubjects.slice(0, 1);
+    setSelectedSubjects(nextSubjects);
+    setSelectedSubject(nextSubjects[0]);
+    setPickerSubject(nextSubjects[0]);
   };
 
   // Exact percentage inputs are the source of truth. A 100% hard blueprint
@@ -490,6 +506,7 @@ export default function PaperGeneratorView({
 
   // Loading States
   const [generating, setGenerating] = useState<boolean>(false);
+  const [generationError, setGenerationError] = useState<{ message: string; available?: number; requested?: number } | null>(null);
   const [swappingId, setSwappingId] = useState<string | number | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
   const [examCreatorOpen, setExamCreatorOpen] = useState(false);
@@ -743,7 +760,13 @@ export default function PaperGeneratorView({
     } else if (preset === 'cbse') {
       setAssessmentTarget('school');
       setSelectedBoard('CBSE');
+      setSelectedClass('Class 12');
       setAssessmentType('full');
+      setSelectedSubjects(['Physics']);
+      setSelectedSubject('Physics');
+      setPickerSubject('Physics');
+      setTopicSelections([]);
+      setQuestionType('all');
       setTotalQuestions(35);
       setTimeAllowed('180 Mins');
       setMarksPerQuestion(3);
@@ -751,7 +774,7 @@ export default function PaperGeneratorView({
       setEasyPct(45);
       setMedPct(45);
       setHardPct(10);
-      setExamTitle(`CBSE Board Pattern Mock - ${selectedSubject}`);
+      setExamTitle('CBSE Board Pattern Mock - Physics');
     }
     setSelectedPreset(preset);
     showToast(`Loaded ${preset.toUpperCase()} blueprint pattern.`);
@@ -858,6 +881,10 @@ export default function PaperGeneratorView({
   };
 
   const toggleSubjectCheckbox = (subject: string, checked: boolean) => {
+    if (hasLockedFullSyllabusSubjects) {
+      showToast(`${competitiveExam} full syllabus has an official fixed subject scope.`);
+      return;
+    }
     const next = checked
       ? Array.from(new Set([...selectedSubjects, subject]))
       : selectedSubjects.filter((item) => item !== subject);
@@ -873,6 +900,7 @@ export default function PaperGeneratorView({
   };
 
   const selectAllSubjects = () => {
+    if (hasLockedFullSyllabusSubjects) return;
     const next = [...eligibleSubjects];
     hasSubjectSelectionBeenEditedRef.current = true;
     setSelectedSubjects(next);
@@ -883,6 +911,7 @@ export default function PaperGeneratorView({
   };
 
   const clearAllSubjects = () => {
+    if (hasLockedFullSyllabusSubjects) return;
     hasSubjectSelectionBeenEditedRef.current = true;
     setSelectedSubjects([]);
     setTopicSelections([]);
@@ -916,7 +945,7 @@ export default function PaperGeneratorView({
       const candidate = data.question as QuestionItem;
       const candidateId = String(candidate._id || candidate.id);
       if (paperQuestions.some(question => String(question._id || question.id) === candidateId)) throw new Error('This question is already in the paper.');
-      setPaperQuestions(previous => [...previous, { ...candidate, marks: Number(candidate.marks) || marksPerQuestion, negative_marks: Number(candidate.negative_marks) || negativeMarks }]);
+      setPaperQuestions(previous => [...previous, { ...candidate, marks: Number(candidate.marks) || marksPerQuestion, negative_marks: resolveQuestionNegativeMarks(candidate, negativeMarks) }]);
       setManualQuestionId('');
       showToast(`Question #${candidate.id} added to the paper.`);
     } catch (error) {
@@ -935,7 +964,7 @@ export default function PaperGeneratorView({
       setPaperQuestions(previous => previous.map((question, index) => index === replacementIndex ? {
         ...candidate,
         marks: Number(currentQuestion.marks) || marksPerQuestion,
-        negative_marks: Number(currentQuestion.negative_marks) || negativeMarks,
+        negative_marks: resolveQuestionNegativeMarks(candidate, negativeMarks),
       } : question));
       setReplacementIndex(null);
       setBuilderMode('edit');
@@ -944,7 +973,7 @@ export default function PaperGeneratorView({
       return;
     }
     if (paperQuestions.length >= totalQuestions) return showToast(`This paper already has its target of ${totalQuestions} questions.`);
-    setPaperQuestions(previous => [...previous, { ...candidate, marks: Number(candidate.marks) || marksPerQuestion, negative_marks: Number(candidate.negative_marks) || negativeMarks }]);
+    setPaperQuestions(previous => [...previous, { ...candidate, marks: Number(candidate.marks) || marksPerQuestion, negative_marks: resolveQuestionNegativeMarks(candidate, negativeMarks) }]);
     showToast(`Question #${candidate.id} added. Paper now has ${paperQuestions.length + 1} questions.`);
   };
 
@@ -977,7 +1006,7 @@ export default function PaperGeneratorView({
       .map(question => ({
         ...question,
         marks: Number(question.marks) || marksPerQuestion,
-        negative_marks: Number(question.negative_marks) || negativeMarks,
+        negative_marks: resolveQuestionNegativeMarks(question, negativeMarks),
       }));
 
     if (!additions.length) return showToast(`All visible questions from ${isCombinedPreview ? 'the selected scope' : 'this chapter'} are already in the paper.`);
@@ -992,7 +1021,7 @@ export default function PaperGeneratorView({
     const additions = topicPreviewQuestions
       .filter(question => checkedPreviewIds.includes(String(question._id || question.id)) && !existingIds.has(String(question._id || question.id)))
       .slice(0, remaining)
-      .map(question => ({ ...question, marks: Number(question.marks) || marksPerQuestion, negative_marks: Number(question.negative_marks) || negativeMarks }));
+      .map(question => ({ ...question, marks: Number(question.marks) || marksPerQuestion, negative_marks: resolveQuestionNegativeMarks(question, negativeMarks) }));
     if (!additions.length) return showToast('Tick one or more new questions first.');
     setPaperQuestions(previous => [...previous, ...additions]);
     setCheckedPreviewIds([]);
@@ -1106,6 +1135,7 @@ export default function PaperGeneratorView({
 
   // Generate Paper API Call
   const handleGeneratePaper = async () => {
+    setGenerationError(null);
     if (assessmentType === 'chapter' && topicSelections.length === 0) {
       setBuilderStep(2);
       showToast('Generation is blocked: choose at least one chapter in Step 2 first.');
@@ -1158,7 +1188,12 @@ export default function PaperGeneratorView({
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate question paper from database');
+        setGenerationError({
+          message: data.error || 'Failed to generate question paper from database.',
+          available: Number.isFinite(Number(data.available)) ? Number(data.available) : undefined,
+          requested: Number.isFinite(Number(data.requested)) ? Number(data.requested) : undefined,
+        });
+        return;
       }
 
       if (Array.isArray(data.questions) && data.questions.length > 0) {
@@ -1173,7 +1208,7 @@ export default function PaperGeneratorView({
         throw new Error('No questions found matching criteria.');
       }
     } catch (err: any) {
-      showToast(`Generation Failed: ${err.message}`);
+      setGenerationError({ message: err?.message || 'Could not generate the paper. Please try again.' });
     } finally {
       setGenerating(false);
     }
@@ -1234,7 +1269,7 @@ export default function PaperGeneratorView({
       updated[index] = {
         ...data.question,
         marks: currentQ.marks || marksPerQuestion,
-        negative_marks: currentQ.negative_marks || negativeMarks,
+        negative_marks: resolveQuestionNegativeMarks(data.question, negativeMarks),
       };
       setPaperQuestions(updated);
       showToast(`🔄 Question Q.${index + 1} swapped with fresh question!`);
@@ -1741,15 +1776,15 @@ export default function PaperGeneratorView({
                     <label className="field-label" htmlFor="paper-subjects">Subjects (select one or more)</label>
                     {isMultiSubjectExam && <div className="subject-selection-actions">
                       <span>Tick every subject you want in this paper</span>
-                      <button type="button" onClick={selectAllSubjects} disabled={!eligibleSubjects.length || selectedSubjects.length === eligibleSubjects.length}>Select all</button>
-                      <button type="button" onClick={clearAllSubjects} disabled={!selectedSubjects.length}>Clear selection</button>
+                      {!hasLockedFullSyllabusSubjects && <><button type="button" onClick={selectAllSubjects} disabled={!eligibleSubjects.length || selectedSubjects.length === eligibleSubjects.length}>Select all</button>
+                      <button type="button" onClick={clearAllSubjects} disabled={!selectedSubjects.length}>Clear selection</button></>}
                     </div>}
                   </div>
                   {taxonomyLoading && eligibleSubjects.length === 0 ? <span className="subject-loading-skeleton" aria-label="Loading subjects with questions"><i /><i /><i /></span> : isMultiSubjectExam ? <fieldset className="subject-checkbox-grid" aria-label="Subjects to include">
                     {eligibleSubjects.map((subject) => {
                       const selected = selectedSubjects.includes(subject);
                       return <label key={subject} className={`subject-checkbox ${selected ? 'is-selected' : ''}`}>
-                        <input type="checkbox" checked={selected} onChange={(event) => toggleSubjectCheckbox(subject, event.target.checked)} />
+                        <input type="checkbox" checked={selected} disabled={hasLockedFullSyllabusSubjects} onChange={(event) => toggleSubjectCheckbox(subject, event.target.checked)} />
                         <span>{subject}</span>
                       </label>;
                     })}
@@ -1772,6 +1807,7 @@ export default function PaperGeneratorView({
                     </div>
                   )}
                   {isJeeAdvancedPlan && isMultiSubjectExam && <p className="multi-subject-hint">PCM is selected by default for JEE Advanced. Untick any subject to tailor this paper.</p>}
+                  {hasLockedFullSyllabusSubjects && <p className="multi-subject-hint">{competitiveExam} full syllabus uses its official subject scope, so these choices are locked.</p>}
                   {isMultiSubjectExam && !selectedSubjects.length && <p className="subject-selection-empty" role="status">No subject selected. Tick one or more subjects to continue.</p>}
                   {!isMultiSubjectExam && <p className="multi-subject-hint">Choose Part test or Full syllabus to select multiple subjects.</p>}
                   {!taxonomyLoading && taxonomyError && <p className="taxonomy-inline-state" role="status">{taxonomyError}</p>}
@@ -1782,7 +1818,7 @@ export default function PaperGeneratorView({
                   <div className="field-row-label"><label className="field-label">Question pattern / format</label><span>Only formats valid for this assessment are shown</span></div>
                   <div className="pill-grid question-type-grid">
                     {patternOptions.map((item) => (
-                      <button key={item.id} type="button" onClick={() => setQuestionType(item.id)} className={`pill-option ${questionType === item.id ? 'active' : ''}`} title={item.title}>{item.label}</button>
+                      <button key={item.id} type="button" onClick={() => setQuestionType(item.id)} disabled={assessmentRule.locked && (assessmentRule.formats?.length || 0) === 1} className={`pill-option ${questionType === item.id ? 'active' : ''}`} title={item.title}>{item.label}</button>
                     ))}
                   </div>
                 </div>
@@ -1968,51 +2004,10 @@ export default function PaperGeneratorView({
                       <button type="button" onClick={() => setBuilderStep(1)}>Change</button>
                     </div>}
                     <div className="topic-preview-actions">
-                      <div className="slots-inline-bar" title="Change target slots for this paper">
+                      <div className="slots-inline-bar slots-readonly" title="Target slots set in Blueprint">
                         <span className="slots-inline-label">Target Slots:</span>
-                        <div className="slots-quick-controls">
-                          <button
-                            type="button"
-                            className="btn-slot-adjust"
-                            onClick={() => setTotalQuestions((prev) => Math.max(paperQuestions.length || 1, prev - 5))}
-                            title="Decrease target slots by 5"
-                          >
-                            -5
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-slot-adjust"
-                            onClick={() => setTotalQuestions((prev) => Math.max(paperQuestions.length || 1, prev - 1))}
-                            title="Decrease target slots by 1"
-                          >
-                            -1
-                          </button>
-                          <input
-                            type="number"
-                            min={paperQuestions.length || 1}
-                            max={200}
-                            value={totalQuestions}
-                            onChange={(e) => setTotalQuestions(Math.max(paperQuestions.length || 1, parseInt(e.target.value, 10) || 1))}
-                            className="input-slot-number"
-                            title="Change target paper slots"
-                          />
-                          <button
-                            type="button"
-                            className="btn-slot-adjust"
-                            onClick={() => setTotalQuestions((prev) => prev + 1)}
-                            title="Increase target slots by 1"
-                          >
-                            +1
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-slot-adjust"
-                            onClick={() => setTotalQuestions((prev) => prev + 5)}
-                            title="Increase target slots by 5"
-                          >
-                            +5
-                          </button>
-                        </div>
+                        <b>{totalQuestions}</b><small>Set in Blueprint</small>
+                        <button type="button" onClick={() => setBuilderStep(1)}>Change</button>
                       </div>
                       {replacementIndex === null && checkedPreviewIds.length > 0 && <button type="button" className="add-topic-preview" onClick={handleAddCheckedPreviewQuestions}>Add checked ({checkedPreviewIds.length})</button>}
                       {replacementIndex === null && hasPreviewScope && <button type="button" className="fill-topic-preview" onClick={() => void handleFillFromPreviewTopic()} disabled={generating || paperQuestions.length >= totalQuestions}>{generating ? 'Adding…' : `${isCombinedPreview ? 'Fill selected scope' : 'Add chapter'} · ${Math.max(0, totalQuestions - paperQuestions.length)} slots`}</button>}
@@ -2185,6 +2180,10 @@ export default function PaperGeneratorView({
               </div>
 
               {/* Generate Button */}
+              {generationError && <div className="generation-error" role="alert">
+                <div><b>Generation could not be completed</b><span>{generationError.message}</span>{generationError.available !== undefined && generationError.requested !== undefined && <small>{generationError.available} matching questions are currently available; {generationError.requested} were requested.</small>}</div>
+                <button type="button" onClick={() => setGenerationError(null)}>Dismiss</button>
+              </div>}
               <div className="wizard-action-footer">
                 <button
                   type="button"
@@ -2521,7 +2520,7 @@ export default function PaperGeneratorView({
                             </>
                           )}
                           <span className="crumb-sep">•</span>
-                          <span className="crumb-marks">Marks: +{q.marks || marksPerQuestion} / -{q.negative_marks || negativeMarks}</span>
+                          <span className="crumb-marks">Marks: +{q.marks || marksPerQuestion} / -{q.negative_marks ?? resolveQuestionNegativeMarks(q, negativeMarks)}</span>
                         </div>
                       )}
 

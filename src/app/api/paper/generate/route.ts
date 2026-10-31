@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
-import { withQuestionType } from '@/lib/question-types';
+import { resolveQuestionNegativeMarks, withQuestionType } from '@/lib/question-types';
 import { keepTeacherSafeQuestions } from '@/lib/question-quality';
 
 export async function POST(req: Request) {
@@ -45,7 +45,14 @@ export async function POST(req: Request) {
     // PCM is preselected for JEE Advanced in the blueprint, but a faculty
     // member may deliberately tailor the bank paper to a subset. Respect the
     // submitted subject scope instead of restoring deselected subjects.
-    const subjectList = requestedSubjects;
+    const officialFullSyllabusSubjects = competitiveExam === 'NEET'
+      ? ['Physics', 'Chemistry', 'Biology']
+      : ['Physics', 'Chemistry', 'Mathematics'];
+    // Official full-syllabus JEE Main/NEET papers have a fixed subject scope.
+    // JEE Advanced intentionally remains teacher-configurable.
+    const subjectList = competitive && assessmentType === 'full' && enforceAssessmentRule && competitiveExam !== 'JEE Advanced'
+      ? officialFullSyllabusSubjects
+      : requestedSubjects;
     const selectedSubject = subjectList[0] || subject;
     const derivedCount = (() => {
       if (!competitive) return assessmentType === 'full' ? 50 : null;
@@ -202,7 +209,7 @@ export async function POST(req: Request) {
       ...q,
       orderIndex: idx + 1,
       marks: Number(marksPerQuestion) || 4,
-      negative_marks: Number(negativeMarks) || 1,
+      negative_marks: resolveQuestionNegativeMarks(q, negativeMarks),
     }));
 
     return NextResponse.json({

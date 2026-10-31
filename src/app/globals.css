@@ -6965,6 +6965,9 @@ div.exam-list-card {
 
 .resize-none { resize: none; }
 
+.generation-error { display: flex; align-items: start; justify-content: space-between; gap: 14px; margin: 16px 0; padding: 13px 15px; border: 1px solid #F3B5B8; border-left: 4px solid #DC3545; border-radius: 10px; background: #FFF6F6; color: #8B1E2A; }
+.generation-error div { display: grid; gap: 3px; }.generation-error b { font-size: .88rem; }.generation-error span, .generation-error small { font-size: .79rem; line-height: 1.45; }.generation-error small { color: #9F3A43; }.generation-error button { flex: 0 0 auto; border: 0; color: #8B1E2A; background: transparent; font: inherit; font-size: .77rem; font-weight: 800; text-decoration: underline; cursor: pointer; }
+
 .paper-studio-source-tabs button {
   min-height: 37px;
   padding: 0 13px;

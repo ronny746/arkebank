@@ -8,6 +8,26 @@ export const QUESTION_TYPE_OPTIONS = [
 
 export type QuestionType = (typeof QUESTION_TYPE_OPTIONS)[number]['id'];
 
+type QuestionForScoring = {
+  question?: unknown;
+  options?: Array<{ text?: unknown; image?: unknown }>;
+  correct_answer?: unknown;
+  correct_option?: unknown;
+};
+
+/** True/false and descriptive responses must never receive an MCQ penalty. */
+export function resolveQuestionNegativeMarks(question: QuestionForScoring, requestedNegativeMarks: unknown): number {
+  const choices = Array.isArray(question.options) ? question.options : [];
+  const optionText = choices.map((option) => String(option?.text ?? '').trim().toLowerCase()).filter(Boolean);
+  const hasOptions = choices.some((option) => Boolean(String(option?.text ?? '').trim() || String(option?.image ?? '').trim()));
+  const isTrueFalse = /true\s*(?:or|\/)\s*false|सत्य\s*(?:या|\/)\s*असत्य/i.test(String(question.question ?? ''))
+    || (optionText.length > 0 && optionText.every((value) => ['true', 'false', 'सत्य', 'असत्य'].includes(value)));
+  const isSubjective = !hasOptions && !String(question.correct_answer ?? '').trim() && !String(question.correct_option ?? '').trim();
+  if (isTrueFalse || isSubjective) return 0;
+  const parsed = Number(requestedNegativeMarks);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 /** A single source of truth for question-type availability and filtering. */
 export function getQuestionTypeMatch(questionType: QuestionType | string | null | undefined): Record<string, unknown> {
   if (questionType === 'mcq') return { 'options.0.text': { $exists: true, $ne: '' } };
