@@ -29,8 +29,11 @@ export async function POST(req: Request) {
     const paperId = paper.id || `paper_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const nowIso = new Date().toISOString();
 
+    // MongoDB's internal `_id` is immutable. Saved-paper documents can carry
+    // it back from a read, so never include it in the replacement `$set`.
+    const { _id: _ignoredMongoId, ...paperFields } = paper;
     const paperDoc = {
-      ...paper,
+      ...paperFields,
       id: paperId,
       createdBy: authUser.email,
       tenantId: authUser.tenantId,
