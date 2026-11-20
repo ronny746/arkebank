@@ -137,7 +137,7 @@ export default function SavedPapersView({
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({ paper: sourcePaper }),
+        body: JSON.stringify(sourcePaper),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error || `Could not upload paper to ${tenant.portalName}.`);
