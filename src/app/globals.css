@@ -5320,6 +5320,10 @@ body {
 .btn-upload-arke { display:inline-flex; align-items:center; justify-content:center; gap:5px; background:#fff!important; color:var(--primary-navy)!important; border:1px solid var(--card-border)!important; padding:8px 10px!important; border-radius:8px; cursor:pointer; font-size:.76rem; font-weight:700; }
 .btn-upload-arke:hover:not(:disabled) { border-color:var(--brand-emerald)!important; color:var(--brand-emerald)!important; background:var(--brand-emerald-subtle)!important; }
 .btn-upload-arke:disabled { opacity:.6; cursor:wait; }
+.saved-paper-card-arke { border-top: 3px solid var(--primary-navy); }
+.saved-paper-card-prepzo { border-top: 3px solid #0B7A3E; }
+.btn-upload-prepzo { color:#0B7A3E!important; border-color:#B6E5C9!important; background:#F1FCF5!important; }
+.btn-upload-prepzo:hover:not(:disabled) { color:#075B2F!important; border-color:#0B7A3E!important; background:#E3F8EC!important; }
 
 /* Question picker states and readable question cards */
 .generator-wizard-container[data-step='2'] .topic-picker-empty {

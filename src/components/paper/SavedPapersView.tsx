@@ -114,7 +114,7 @@ export default function SavedPapersView({
     onLoadPaper(paper);
   };
 
-  const handleUploadToArke = async (paper: SavedPaper) => {
+  const handleUploadToPortal = async (paper: SavedPaper) => {
     setUploadingPaperId(paper.id);
     try {
       let sourcePaper = paper;
@@ -131,17 +131,19 @@ export default function SavedPapersView({
       const token = localStorage.getItem('arke_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
-      const response = await fetch('/api/integrations/arke/import-paper', {
+      // Saved papers are tenant-owned. Re-save through the authenticated API so
+      // the active portal (ARKE or Prepzo) remains the destination.
+      const response = await fetch('/api/paper/save', {
         method: 'POST',
         headers,
         credentials: 'include',
         body: JSON.stringify({ paper: sourcePaper }),
       });
       const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(result?.error || 'ARKE upload failed.');
-      showToast(result?.alreadyImported ? 'Paper already exists in ARKE Exam Papers.' : 'Paper uploaded to ARKE Exam Papers.');
+      if (!response.ok) throw new Error(result?.error || `Could not upload paper to ${tenant.portalName}.`);
+      showToast(`Paper uploaded to ${tenant.portalName} database.`);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Could not upload paper to ARKE.');
+      showToast(error instanceof Error ? error.message : `Could not upload paper to ${tenant.portalName}.`);
     } finally {
       setUploadingPaperId(null);
     }
@@ -281,7 +283,7 @@ export default function SavedPapersView({
               : 'Recent';
 
             return (
-              <div key={paper.id} className="saved-paper-card">
+              <div key={paper.id} className={`saved-paper-card saved-paper-card-${tenant.id}`}>
                 <div className="card-badge-row">
                   <span className="class-subject-badge">
                     {paper.class_std || 'Class 12'} • {paper.subject || 'General'}
@@ -322,18 +324,16 @@ export default function SavedPapersView({
                   <button type="button" onClick={() => setPaperForExam(paper)} className="btn-create-exam">
                     <span>Create Exam</span>
                   </button>
-                  {tenant.id === 'prepzo' && (
-                    <button
-                      type="button"
-                      onClick={() => void handleUploadToArke(paper)}
-                      className="btn-upload-arke"
-                      disabled={uploadingPaperId === paper.id}
-                      title="Copy this paper into ARKE Exam Papers"
-                    >
-                      <UploadCloud size={13} />
-                      <span>{uploadingPaperId === paper.id ? 'Uploading…' : 'Upload to ARKE'}</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleUploadToPortal(paper)}
+                    className={`btn-upload-arke btn-upload-${tenant.id}`}
+                    disabled={uploadingPaperId === paper.id}
+                    title={`Save this paper to the ${tenant.portalName} database`}
+                  >
+                    <UploadCloud size={13} />
+                    <span>{uploadingPaperId === paper.id ? 'Uploading…' : `Upload to ${tenant.portalName}`}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setDeleteTarget(paper)}
