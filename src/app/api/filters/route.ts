@@ -20,6 +20,7 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const class_std = searchParams.get('class_std');
+    const dataset = searchParams.get('dataset');
     const subject = searchParams.get('subject');
     const topic = searchParams.get('topic');
     const withQuestions = searchParams.get('withQuestions') === 'true';
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
       .sort()
       .join('|') || 'none';
 
-    const cacheKey = `filters:${class_std || 'all'}:${subject || 'all'}:${topic || 'all'}:${scopeKey}:${withQuestions}:${formatScope || 'standard'}:${lang || 'all'}`;
+    const cacheKey = `filters:${dataset || 'all'}:${class_std || 'all'}:${subject || 'all'}:${topic || 'all'}:${scopeKey}:${withQuestions}:${formatScope || 'standard'}:${lang || 'all'}`;
 
     // Cache filters response in Redis/in-memory for 15 minutes (900 seconds)
     const result = await cached(cacheKey, 900, async () => {
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
       // 1. Paper Studio must not offer empty streams. The bank can show the
       // complete taxonomy, but generator choices must have usable records.
       const classQuestionScope: Record<string, unknown> = {};
+      if (dataset && dataset !== 'all') classQuestionScope.dataset = dataset;
       if (lang && lang !== 'all') classQuestionScope.lang = lang;
       const dynamicClasses = (withQuestions
         ? await questionsCol.distinct('class_std', classQuestionScope)
@@ -70,6 +72,7 @@ export async function GET(req: Request) {
         syllabusQuery.class_std = class_std;
       }
       const questionScope: Record<string, unknown> = {};
+      if (dataset && dataset !== 'all') questionScope.dataset = dataset;
       // Competitive full/part tests cover Class 11 + 12 material. Their
       // dedicated JA/JM/NEET buckets are retained, but are not the only
       // source because many valid hard questions live in the class buckets.

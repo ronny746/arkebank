@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const {
       class_std = 'all',
+      dataset = 'all',
       subject = 'all',
       subjects = [],
       topics = [],
@@ -89,6 +90,7 @@ export async function POST(req: Request) {
 
     // Build base filter
     const baseMatch: Record<string, any> = {};
+    if (dataset && dataset !== 'all') baseMatch.dataset = dataset;
 
     if (class_std && class_std !== 'all') {
       const competitiveSource = competitive && ['JEE Main', 'JEE Advanced', 'NEET'].includes(competitiveExam);

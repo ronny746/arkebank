@@ -9,6 +9,7 @@
 | Scrollbar | `src/app/globals.css` | `DESIGN.md` | Paper question-picker internal surface | Visual desktop and narrow viewport check |
 | Toast | Portal shell `showToast` | `src/app/page.tsx` | Success and error feedback | Toast visibility after an action |
 | CRUD | Route APIs and workspace navigation | `src/app/api` routes | Paper draft and exam creation | Type-check plus create/read workflow |
+| Cross-portal paper import | Saved paper card (Prepzo only) | `api/integrations/arke/import-paper` + ARKE LMS import route | Idempotent server-to-server copy into ARKE Exam Papers | Shared-secret request, retry does not duplicate, build/type-check |
 
 ## Navigation and scroll ownership
 

@@ -35,13 +35,37 @@ export default function PaperPrintableDocument({
 
   const printableQuestions = useMemo(() => {
     const seen = new Set<string>();
-    return questions.filter((question) => {
+    const uniqueQuestions = questions.filter((question) => {
       const identity = String(question._id || question.id);
       if (seen.has(identity)) return false;
       seen.add(identity);
       return true;
     });
+
+    // A multi-subject assessment must read like an actual paper, not a shuffled
+    // question-bank export. Keep each subject together in a predictable exam
+    // order while preserving the teacher's chosen order within that subject.
+    const subjectOrder = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+    const subjectsInPaper = new Set(uniqueQuestions.map((question) => question.subject).filter(Boolean));
+    if (subjectsInPaper.size < 2) return uniqueQuestions;
+
+    return uniqueQuestions
+      .map((question, originalIndex) => ({ question, originalIndex }))
+      .sort((left, right) => {
+        const leftSubject = left.question.subject || 'Other';
+        const rightSubject = right.question.subject || 'Other';
+        const leftRank = subjectOrder.indexOf(leftSubject);
+        const rightRank = subjectOrder.indexOf(rightSubject);
+        const leftPriority = leftRank === -1 ? subjectOrder.length : leftRank;
+        const rightPriority = rightRank === -1 ? subjectOrder.length : rightRank;
+        if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+        if (leftSubject !== rightSubject) return leftSubject.localeCompare(rightSubject);
+        return left.originalIndex - right.originalIndex;
+      })
+      .map(({ question }) => question);
   }, [questions]);
+
+  const hasMultipleSubjects = new Set(printableQuestions.map((question) => question.subject).filter(Boolean)).size > 1;
 
   // Compute stats
   const totalQuestions = printableQuestions.length;
@@ -182,10 +206,19 @@ export default function PaperPrintableDocument({
         {printableQuestions.map((q, idx) => {
           const qNumber = idx + 1;
           const qMarks = Number(q.marks) || 4;
-          const qNeg = Number(q.negative_marks) || 1;
+          const configuredNegativeMark = Number(q.negative_marks);
+          const qNeg = Number.isFinite(configuredNegativeMark) ? configuredNegativeMark : 1;
+          const startsSubjectSection = hasMultipleSubjects && (idx === 0 || q.subject !== printableQuestions[idx - 1]?.subject);
 
           return (
-            <div key={`${q._id || q.id}-${idx}`} className="paper-question-block">
+            <React.Fragment key={`${q._id || q.id}-${idx}`}>
+              {startsSubjectSection && (
+                <div className="paper-subject-section-heading" role="heading" aria-level={3}>
+                  <span>Subject</span>
+                  <strong>{q.subject}</strong>
+                </div>
+              )}
+              <div className="paper-question-block">
               {/* Question Header Line */}
               <div className="paper-q-header">
                 <div className="paper-q-num-box">
@@ -195,7 +228,7 @@ export default function PaperPrintableDocument({
                   )}
                 </div>
                 <div className="paper-q-marks-box">
-                  <span className="marks-badge">[{qMarks} M | -{qNeg}]</span>
+                  <span className="marks-badge">{qNeg > 0 ? `[${qMarks} M | -${qNeg}]` : `[${qMarks} M]`}</span>
                 </div>
               </div>
 
@@ -302,7 +335,8 @@ export default function PaperPrintableDocument({
                   </div>
                 </div>
               )}
-            </div>
+              </div>
+            </React.Fragment>
           );
         })}
       </div>

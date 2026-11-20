@@ -32,12 +32,12 @@ export async function POST(req: Request) {
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
     saveOtp(`${tenant.id}:${normalizedEmail}`, generatedOtp, 600); // 10 minutes expiry
 
-    console.log(`[AUTH] Secure OTP generated for ${normalizedEmail}: ${generatedOtp}`);
+    // Delivery integration belongs here (email/SMS provider). Never log or
+    // return OTPs in production responses.
 
     return NextResponse.json({
       success: true,
-      message: `Security code sent to ${normalizedEmail} for ${tenant.name}.`,
-      demoOtp: generatedOtp // Provided on screen for immediate testing
+      message: `Security code generated for ${normalizedEmail} for ${tenant.name}.`,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

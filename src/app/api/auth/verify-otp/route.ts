@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     const isValid = verifyOtp(`${tenant.id}:${normalizedEmail}`, otp);
 
     if (!isValid) {
-      return NextResponse.json({ error: 'Invalid or expired passcode. Please verify or use master code 123456.' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid or expired passcode. Please request a new code.' }, { status: 401 });
     }
 
     const displayName = normalizedEmail === 'rohit@arkescholar.com'

@@ -89,6 +89,13 @@ type AssessmentTarget = 'school' | 'competitive';
 type AssessmentType = 'viva' | 'chapter' | 'part' | 'full';
 type CompetitiveExam = 'JEE Main' | 'JEE Advanced' | 'NEET';
 type BlueprintPreset = 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse';
+type BankDataset = 'all' | 'core_en_hi' | 'testlypro' | 'third_dataset';
+const BANK_DATASETS: Array<{ id: BankDataset; label: string; detail: string }> = [
+  { id: 'all', label: 'All datasets', detail: '7,65,739 questions' },
+  { id: 'core_en_hi', label: 'Core EN/HI', detail: '5,27,562 questions' },
+  { id: 'testlypro', label: 'TestlyPro', detail: '2,38,177 questions' },
+  { id: 'third_dataset', label: 'Third dataset', detail: '30,09,932 questions' },
+];
 
 const EXAM_CLASS_VALUE: Record<CompetitiveExam, string> = {
   'JEE Main': 'JM',
@@ -121,6 +128,7 @@ export default function PaperGeneratorView({
   tenant,
 }: PaperGeneratorViewProps) {
   const [studioSource, setStudioSource] = useState<'bank' | 'ai'>('bank');
+  const [bankDataset, setBankDataset] = useState<BankDataset>('all');
   // Active Studio Tab: editor | preview (student paper) | solutions (teacher key)
   const [studioTab, setStudioTab] = useState<'editor' | 'preview' | 'solutions'>('editor');
   const [builderMode, setBuilderMode] = useState<'configure' | 'edit'>('configure');
@@ -198,6 +206,19 @@ export default function PaperGeneratorView({
   useEffect(() => {
     selectedSubjectsRef.current = selectedSubjects;
   }, [selectedSubjects]);
+
+  // Chapters are dataset-specific labels. Never carry an old source's chapter
+  // scope into a newly selected bank, where it can produce a misleading empty
+  // question picker.
+  useEffect(() => {
+    setTopicSelections([]);
+    setPreviewTopic('');
+    setPreviewSelectedScope(false);
+    setTopicPreviewQuestions([]);
+    setCheckedPreviewIds([]);
+    setPreviewNextCursor(null);
+    setPreviewHasMore(false);
+  }, [bankDataset]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -609,7 +630,7 @@ export default function PaperGeneratorView({
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
         const res = await fetch(
-          `/api/filters?class_std=${encodeURIComponent(selectedClass)}&subject=${encodeURIComponent(pickerSubject)}&lang=${selectedLang}&withQuestions=true${isCompetitive ? '&format_scope=assessment' : ''}`,
+          `/api/filters?dataset=${bankDataset}&class_std=${encodeURIComponent(selectedClass)}&subject=${encodeURIComponent(pickerSubject)}&lang=${selectedLang}&withQuestions=true${isCompetitive ? '&format_scope=assessment' : ''}`,
           { headers, credentials: 'include', signal: controller.signal }
         );
         if (!res.ok) throw new Error('Could not load available subjects and chapters.');
@@ -683,7 +704,7 @@ export default function PaperGeneratorView({
     }
     void fetchDynamicTopics();
     return () => controller.abort();
-  }, [studioSource, pickerSubject, selectedClass, selectedLang, isMultiSubjectExam, isCompetitive, isJeeAdvancedPlan]);
+  }, [bankDataset, studioSource, pickerSubject, selectedClass, selectedLang, isMultiSubjectExam, isCompetitive, isJeeAdvancedPlan]);
 
   // Filtered topics based on search input
   const filteredTopics = useMemo(() => {
@@ -835,7 +856,7 @@ export default function PaperGeneratorView({
       const token = localStorage.getItem('arke_token');
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const responses = await Promise.all(selectedSubjects.map(async (subject) => {
-        const query = new URLSearchParams({ class_std: selectedClass, subject, lang: selectedLang, withQuestions: 'true' });
+        const query = new URLSearchParams({ dataset: bankDataset, class_std: selectedClass, subject, lang: selectedLang, withQuestions: 'true' });
         if (isCompetitive) query.set('format_scope', 'assessment');
         const response = await fetch(`/api/filters?${query.toString()}`, { headers, credentials: 'include' });
         const data = await response.json();
@@ -1044,7 +1065,7 @@ export default function PaperGeneratorView({
           scopes: activePreviewScopes,
           totalQuestions: remaining, lang: selectedLang,
           difficultyDistribution: { easy: easyPct, medium: medPct, hard: hardPct },
-          hasImageOnly, pyqOnly, questionType, marksPerQuestion, negativeMarks,
+          dataset: bankDataset, hasImageOnly, pyqOnly, questionType, marksPerQuestion, negativeMarks,
           assessmentTarget, assessmentType, competitiveExam,
           enforceAssessmentRule: false,
         }),
@@ -1092,7 +1113,7 @@ export default function PaperGeneratorView({
     try {
       const token = localStorage.getItem('arke_token');
       const queryParams: Record<string, string> = {
-        limit: '12', pagination: 'cursor', class_std: selectedClass, lang: selectedLang,
+        limit: '12', pagination: 'cursor', dataset: bankDataset, class_std: selectedClass, lang: selectedLang,
       };
       if (isCompetitive) queryParams.format_scope = 'assessment';
       if (isCompetitive && ['JEE Main', 'NEET'].includes(competitiveExam)) queryParams.max_difficulty = '3';
@@ -1132,7 +1153,7 @@ export default function PaperGeneratorView({
     void loadTopicPreview();
   // Topic selection is explicit; this fetch is intentionally scoped to its latest selection.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePreviewScopeKey, competitiveExam, isCombinedPreview, isCompetitive, selectedClass, selectedLang, questionType]);
+  }, [activePreviewScopeKey, bankDataset, competitiveExam, isCombinedPreview, isCompetitive, selectedClass, selectedLang, questionType]);
 
   // Generate Paper API Call
   const handleGeneratePaper = async () => {
@@ -1165,6 +1186,7 @@ export default function PaperGeneratorView({
         credentials: 'include',
         body: JSON.stringify({
           class_std: selectedClass,
+          dataset: bankDataset,
           subject: selectedSubject,
           subjects: selectedSubjects,
           topics: selectedTopics,
@@ -1548,6 +1570,12 @@ export default function PaperGeneratorView({
     </nav>
   );
 
+  const bankDatasetTabs = <nav className="paper-studio-source-tabs hide-print" aria-label="Question dataset">
+    {BANK_DATASETS.map((source) => <button key={source.id} type="button" className={bankDataset === source.id ? 'active' : ''} onClick={() => setBankDataset(source.id)}>
+      <b>{source.label}</b><span>{source.detail}</span>
+    </button>)}
+  </nav>;
+
   if (studioSource === 'ai') {
     return (
       <div className="paper-generator-wrapper ai-paper-generator-wrapper">
@@ -1560,6 +1588,7 @@ export default function PaperGeneratorView({
   return (
     <div className={`paper-generator-wrapper ${studioFocusMode && builderMode === 'edit' ? 'studio-focus-mode' : ''}`}>
       {studioSourceTabs}
+      {bankDatasetTabs}
       {/* Top Paper Studio Navigation & Quick Actions Bar */}
       {builderMode === 'edit' && <div className="paper-studio-nav">
         <div className="studio-nav-left">

@@ -15,9 +15,11 @@ export function saveOtp(email: string, otp: string, ttlSeconds = 600) {
 export function verifyOtp(email: string, inputOtp: string): boolean {
   const normalized = email.toLowerCase().trim();
   const entry = otpMap.get(normalized);
-  
-  // For demo/developer convenience, "123456" is also accepted as master bypass OTP
-  if (inputOtp === '123456') {
+  const bypassOtp = process.env.OTP_BYPASS_CODE;
+
+  // Intended only for explicitly configured temporary/internal deployments.
+  // No bypass exists unless the production environment supplies a value.
+  if (bypassOtp && inputOtp.trim() === bypassOtp) {
     return true;
   }
 

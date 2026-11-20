@@ -64,6 +64,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
 
   // Active Filter Controls (All cleanly managed in the Sidebar)
   const [selectedClass, setSelectedClass] = useState<string>('all');
+  const [selectedDataset, setSelectedDataset] = useState<'all' | 'core_en_hi' | 'testlypro' | 'third_dataset'>('all');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
   const [selectedSubTopic, setSelectedSubTopic] = useState<string>('all');
@@ -99,7 +100,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
   const [navCollapsed, setNavCollapsed] = useState(false);
 
   const questionFeedScope = [
-    selectedClass, selectedSubject, selectedTopic, selectedSubTopic,
+    selectedDataset, selectedClass, selectedSubject, selectedTopic, selectedSubTopic,
     selectedDifficulty, selectedYear, selectedLang,
     hasImageOnly ? 'images' : 'all', searchQuery, limit,
   ].join('|');
@@ -161,6 +162,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
   const loadFilters = useCallback(async (currentClass: string, currentSubject: string, currentTopic: string) => {
     try {
       const params = new URLSearchParams();
+      if (selectedDataset !== 'all') params.set('dataset', selectedDataset);
       if (currentClass !== 'all') params.set('class_std', currentClass);
       if (currentSubject !== 'all') params.set('subject', currentSubject);
       if (currentTopic !== 'all') params.set('topic', currentTopic);
@@ -194,14 +196,14 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
     } finally {
       setFiltersLoading(false);
     }
-  }, []);
+  }, [selectedDataset]);
 
   // Reload filters whenever class/subject/topic changes
   useEffect(() => {
     if (user) {
       loadFilters(selectedClass, selectedSubject, selectedTopic);
     }
-  }, [user, selectedClass, selectedSubject, selectedTopic, loadFilters]);
+  }, [user, selectedDataset, selectedClass, selectedSubject, selectedTopic, loadFilters]);
 
   // Fetch Questions
   const fetchQuestions = useCallback(async () => {
@@ -220,6 +222,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
         pagination: 'cursor',
       });
       if (questionCursor) params.set('cursor', questionCursor);
+      if (selectedDataset !== 'all') params.set('dataset', selectedDataset);
 
       if (selectedClass !== 'all') params.set('class_std', selectedClass);
       if (selectedSubject !== 'all') params.set('subject', selectedSubject);
@@ -276,6 +279,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
     selectedDifficulty,
     selectedYear,
     selectedLang,
+    selectedDataset,
     hasImageOnly,
     searchQuery,
   ]);
@@ -504,6 +508,14 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
                 ) : (
                   <>
                 {/* 1. Target Class / Stream */}
+                <div className="filter-group">
+                  <label className="filter-group-label">QUESTION SOURCE</label>
+                  <div className="pill-grid">
+                    {[
+                      ['all', 'All datasets'], ['core_en_hi', 'Core EN/HI'], ['testlypro', 'TestlyPro'], ['third_dataset', 'Third dataset'],
+                    ].map(([value, label]) => <button key={value} type="button" onClick={() => { setSelectedDataset(value as 'all' | 'core_en_hi' | 'testlypro' | 'third_dataset'); setSelectedSubject('all'); setSelectedTopic('all'); setSelectedSubTopic('all'); }} className={`pill-option ${selectedDataset === value ? 'active' : ''}`}>{label}</button>)}
+                  </div>
+                </div>
                 <div className="filter-group">
                   <label className="filter-group-label">CLASS / EXAMINATION TARGET</label>
                   <div className="pill-grid">
@@ -770,6 +782,9 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
                       <span>Class: {selectedClass}</span>
                       <button onClick={() => setSelectedClass('all')}><X size={11} /></button>
                     </span>
+                  )}
+                  {selectedDataset !== 'all' && (
+                    <span className="filter-chip"><span>Source: {selectedDataset === 'core_en_hi' ? 'Core EN/HI' : selectedDataset === 'testlypro' ? 'TestlyPro' : 'Third dataset'}</span><button onClick={() => setSelectedDataset('all')}><X size={11} /></button></span>
                   )}
                   {selectedSubject !== 'all' && (
                     <span className="filter-chip">

@@ -9,6 +9,7 @@ import {
   Calendar, 
   RotateCw,
   ExternalLink,
+  UploadCloud,
   Plus,
   Search,
   X
@@ -33,6 +34,7 @@ export default function SavedPapersView({
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [paperForExam, setPaperForExam] = useState<SavedPaper | null>(null);
+  const [uploadingPaperId, setUploadingPaperId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavedPaper | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -110,6 +112,39 @@ export default function SavedPapersView({
     }
 
     onLoadPaper(paper);
+  };
+
+  const handleUploadToArke = async (paper: SavedPaper) => {
+    setUploadingPaperId(paper.id);
+    try {
+      let sourcePaper = paper;
+      if (!sourcePaper.questions || sourcePaper.questions.length === 0) {
+        const token = localStorage.getItem('arke_token');
+        const headers: Record<string, string> = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const fullPaperResponse = await fetch(`/api/paper/saved/${paper.id}`, { headers, credentials: 'include', cache: 'no-store' });
+        const fullPaper = await fullPaperResponse.json();
+        if (!fullPaperResponse.ok || !fullPaper.paper) throw new Error(fullPaper?.error || 'Could not load the complete paper.');
+        sourcePaper = fullPaper.paper;
+      }
+
+      const token = localStorage.getItem('arke_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch('/api/integrations/arke/import-paper', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ paper: sourcePaper }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || 'ARKE upload failed.');
+      showToast(result?.alreadyImported ? 'Paper already exists in ARKE Exam Papers.' : 'Paper uploaded to ARKE Exam Papers.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not upload paper to ARKE.');
+    } finally {
+      setUploadingPaperId(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -287,6 +322,18 @@ export default function SavedPapersView({
                   <button type="button" onClick={() => setPaperForExam(paper)} className="btn-create-exam">
                     <span>Create Exam</span>
                   </button>
+                  {tenant.id === 'prepzo' && (
+                    <button
+                      type="button"
+                      onClick={() => void handleUploadToArke(paper)}
+                      className="btn-upload-arke"
+                      disabled={uploadingPaperId === paper.id}
+                      title="Copy this paper into ARKE Exam Papers"
+                    >
+                      <UploadCloud size={13} />
+                      <span>{uploadingPaperId === paper.id ? 'Uploading…' : 'Upload to ARKE'}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setDeleteTarget(paper)}

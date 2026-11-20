@@ -27,12 +27,15 @@ export async function GET(req: Request) {
     const limit = Math.min(25, Math.max(1, parseInt(searchParams.get('limit') || '15', 10)));
     const cursorMode = searchParams.get('pagination') === 'cursor';
     const rawCursor = searchParams.get('cursor');
-    let cursor: { id: number; recordId: string } | null = null;
+    let cursor: { id: string | number; recordId: string } | null = null;
     if (cursorMode && rawCursor) {
       try {
         const decoded = JSON.parse(Buffer.from(rawCursor, 'base64url').toString('utf8'));
         if (Number.isFinite(Number(decoded?.id)) && typeof decoded?.recordId === 'string') {
-          cursor = { id: Number(decoded.id), recordId: decoded.recordId };
+          // Legacy banks use numeric IDs while the third dataset uses source
+          // IDs such as EM0000015. Preserve the original scalar type so the
+          // Mongo sort and $gt cursor advance correctly for both.
+          cursor = { id: decoded.id, recordId: decoded.recordId };
         }
       } catch {
         return NextResponse.json({ success: false, error: 'Invalid question cursor.' }, { status: 400 });
@@ -41,6 +44,7 @@ export async function GET(req: Request) {
     const skip = (page - 1) * limit;
 
     const class_std = searchParams.get('class_std');
+    const dataset = searchParams.get('dataset');
     const format_scope = searchParams.get('format_scope');
     const subject = searchParams.get('subject');
     const topic = searchParams.get('topic');
@@ -59,6 +63,7 @@ export async function GET(req: Request) {
     const subTopics = searchParams.getAll('sub_topic').filter(Boolean);
 
     const query: any = {};
+    if (dataset && dataset !== 'all') query.dataset = dataset;
 
     const isCompetitiveAssessment = format_scope === 'assessment'
       && ['JA', 'JM', 'NEET', 'JEE Main', 'JEE Advanced', 'Competitive Exam'].includes(class_std || '');
@@ -177,7 +182,12 @@ export async function GET(req: Request) {
       : [];
     const languagesById = new Map(languageRows.map((row: any) => [String(row._id), (row.languages || []).sort()]));
     questions.forEach((question: any) => { question.available_languages = languagesById.get(String(question.id)) || [question.lang || 'en']; });
-    const lastQuestion = questions[questions.length - 1] as { id?: number; _id?: unknown } | undefined;
+    // The rendered list may collapse EN/HI translations. The cursor must
+    // always advance from the final database row, not the final rendered card;
+    // otherwise the next request starts inside the prior raw batch and repeats
+    // questions (especially for the Third Dataset's shared source IDs).
+    const cursorRows = cursorMode ? resultQuestions.slice(0, limit) : [];
+    const lastQuestion = cursorRows[cursorRows.length - 1] as { id?: string | number; _id?: unknown } | undefined;
     const nextCursor = hasMore && lastQuestion
       ? Buffer.from(JSON.stringify({ id: lastQuestion.id, recordId: String(lastQuestion._id) })).toString('base64url')
       : null;

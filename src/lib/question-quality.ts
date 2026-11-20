@@ -5,6 +5,7 @@ type QuestionLike = {
   id?: unknown;
   question?: unknown;
   solution?: unknown;
+  correct_answer?: unknown;
   options?: Array<{ text?: unknown }>;
 };
 
@@ -19,6 +20,36 @@ function decoded(value: unknown) {
     .replace(/&quot;/gi, '"')
     .replace(/&amp;/gi, '&')
     .trim();
+}
+
+/**
+ * Imports sometimes wrap otherwise valid question copy in presentational tags
+ * such as <p> and <div>. Faculty cards render through MathRenderer, so retain
+ * only text/LaTeX here and never pass imported markup to the browser.
+ */
+function importedMarkupToText(value: unknown): string {
+  const source = String(value ?? '');
+  if (!htmlTagPattern.test(source)) return source;
+
+  return source
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|li|tr|h[1-6])\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function normalizeImportedQuestion<T extends QuestionLike>(question: T): T {
+  return {
+    ...question,
+    question: importedMarkupToText(question.question),
+    solution: importedMarkupToText(question.solution),
+    correct_answer: importedMarkupToText(question.correct_answer),
+    options: question.options?.map((option) => ({
+      ...option,
+      text: importedMarkupToText(option?.text),
+    })),
+  } as T;
 }
 
 /**
@@ -42,7 +73,10 @@ export function getTeacherVisibleQuestionIssue(question: QuestionLike): string |
 }
 
 export async function keepTeacherSafeQuestions<T extends QuestionLike>(db: Db, questions: T[]): Promise<T[]> {
-  const unsafe = questions
+  // Normalize harmless formatting wrappers first. This makes legacy/TestlyPro
+  // questions readable while keeping every imported HTML tag out of faculty UI.
+  const normalizedQuestions = questions.map(normalizeImportedQuestion);
+  const unsafe = normalizedQuestions
     .map((question) => ({ question, issue: getTeacherVisibleQuestionIssue(question) }))
     .filter((item): item is { question: T; issue: string } => Boolean(item.issue));
 
@@ -64,5 +98,5 @@ export async function keepTeacherSafeQuestions<T extends QuestionLike>(db: Db, q
     )));
   }
 
-  return questions.filter((question) => !getTeacherVisibleQuestionIssue(question));
+  return normalizedQuestions.filter((question) => !getTeacherVisibleQuestionIssue(question));
 }
