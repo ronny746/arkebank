@@ -6,9 +6,9 @@ export async function POST(req: Request) {
   const user = extractAndVerifyToken(req);
   if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-  // Upload-to-ARKE is intentionally available from the Prepzo tenant only.
-  if (getTenantForRequest(req).id !== 'prepzo' || user.tenantId !== 'prepzo') {
-    return NextResponse.json({ success: false, error: 'Switch to the Prepzo portal to upload a paper to ARKE.' }, { status: 403 });
+  const tenant = getTenantForRequest(req);
+  if (tenant.id !== user.tenantId) {
+    return NextResponse.json({ success: false, error: 'The active portal does not match your authenticated tenant.' }, { status: 403 });
   }
 
   const targetUrl = process.env.ARKE_IMPORT_URL;
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-arke-import-secret': sharedSecret },
-      body: JSON.stringify({ sourceTenant: 'prepzo', sourcePaperId: String(body.paper.id), paper: body.paper }),
+      body: JSON.stringify({ sourceTenant: tenant.id, sourcePaperId: String(body.paper.id), paper: body.paper }),
       signal: controller.signal,
       cache: 'no-store',
     });

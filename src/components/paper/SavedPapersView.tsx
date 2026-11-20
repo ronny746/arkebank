@@ -131,17 +131,15 @@ export default function SavedPapersView({
       const token = localStorage.getItem('arke_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
-      // Saved papers are tenant-owned. Re-save through the authenticated API so
-      // the active portal (ARKE or Prepzo) remains the destination.
-      const response = await fetch('/api/paper/save', {
+      const response = await fetch('/api/integrations/arke/import-paper', {
         method: 'POST',
         headers,
         credentials: 'include',
         body: JSON.stringify(sourcePaper),
       });
       const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(result?.error || `Could not upload paper to ${tenant.portalName}.`);
-      showToast(`Paper uploaded to ${tenant.portalName} database.`);
+      if (!response.ok) throw new Error(result?.error || 'Could not import paper into ARKE Bank Papers.');
+      showToast(result?.alreadyImported ? 'Paper already exists in ARKE Bank Papers.' : 'Paper uploaded to ARKE Bank Papers.');
     } catch (error) {
       showToast(error instanceof Error ? error.message : `Could not upload paper to ${tenant.portalName}.`);
     } finally {
