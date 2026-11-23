@@ -131,15 +131,18 @@ export default function SavedPapersView({
       const token = localStorage.getItem('arke_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
-      const response = await fetch('/api/integrations/arke/import-paper', {
+      const importPath = tenant.id === 'prepzo'
+        ? '/api/integrations/prepzo/import-paper'
+        : '/api/integrations/arke/import-paper';
+      const response = await fetch(importPath, {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify(sourcePaper),
+        body: JSON.stringify({ paper: sourcePaper }),
       });
       const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(result?.error || 'Could not import paper into ARKE Bank Papers.');
-      showToast(result?.alreadyImported ? 'Paper already exists in ARKE Bank Papers.' : 'Paper uploaded to ARKE Bank Papers.');
+      if (!response.ok) throw new Error(result?.error || `Could not import paper into ${tenant.portalName}.`);
+      showToast(result?.alreadyImported ? `Paper already exists in ${tenant.portalName}.` : `Paper uploaded to ${tenant.portalName}.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : `Could not upload paper to ${tenant.portalName}.`);
     } finally {
