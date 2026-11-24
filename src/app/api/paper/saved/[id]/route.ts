@@ -72,7 +72,8 @@ export async function DELETE(
 
     const result = await papersCol.deleteOne({ id, ...tenantDocumentQuery(authUser.tenantId) });
     await delCachePattern('papers:*');
-    await delCache(`paper:id:${id}`);
+    // Same key GET writes; the old key left deleted papers readable for 5 min.
+    await delCache(`paper:${authUser.tenantId}:id:${id}`);
 
     return NextResponse.json({
       success: true,

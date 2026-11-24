@@ -13,6 +13,8 @@ import AiPaperStudioView from './AiPaperStudioView';
 import ExamCreatorModal from '../exams/ExamCreatorModal';
 import { QUESTION_TYPE_OPTIONS, resolveQuestionNegativeMarks, type QuestionType } from '@/lib/question-types';
 import type { TenantBrand } from '@/lib/tenant';
+import { DIFFICULTY_LEVELS, fitSplitToAvailability, hasShortfall, type DifficultyAvailability } from '@/lib/difficulty-split';
+import { t } from '@/lib/i18n';
 import { 
   Sparkles, 
   Printer, 
@@ -89,12 +91,15 @@ type AssessmentTarget = 'school' | 'competitive';
 type AssessmentType = 'viva' | 'chapter' | 'part' | 'full';
 type CompetitiveExam = 'JEE Main' | 'JEE Advanced' | 'NEET';
 type BlueprintPreset = 'balanced' | 'foundation' | 'advanced' | 'jee_main' | 'neet' | 'cbse';
-type BankDataset = 'all' | 'core_en_hi' | 'testlypro' | 'third_dataset';
-const BANK_DATASETS: Array<{ id: BankDataset; label: string; detail: string }> = [
-  { id: 'all', label: 'All datasets', detail: '7,65,739 questions' },
-  { id: 'core_en_hi', label: 'Core EN/HI', detail: '5,27,562 questions' },
-  { id: 'testlypro', label: 'TestlyPro', detail: '2,38,177 questions' },
-  { id: 'third_dataset', label: 'Third dataset', detail: '30,09,932 questions' },
+type BankDataset = 'all' | 'core_en_hi' | 'testlypro' | 'third_dataset' | 'pyq';
+// Counts are a production snapshot (24 Nov 2026). "All" is derived per portal
+// as the sum of the datasets it may show.
+const BANK_DATASETS: Array<{ id: BankDataset; label: string; count: number }> = [
+  { id: 'all', label: 'All datasets', count: 0 },
+  { id: 'core_en_hi', label: 'Core EN/HI', count: 527562 },
+  { id: 'testlypro', label: 'TestlyPro', count: 238177 },
+  { id: 'third_dataset', label: 'Third dataset', count: 2809775 },
+  { id: 'pyq', label: 'PYQ', count: 7799 },
 ];
 
 const EXAM_CLASS_VALUE: Record<CompetitiveExam, string> = {
@@ -109,8 +114,14 @@ const COMPETITIVE_FORMATS: Record<CompetitiveExam, QuestionType[]> = {
   NEET: ['all', 'mcq'],
 };
 
-const difficultyBand = (difficulty: QuestionItem['difficulty']) => {
+const difficultyBand = (difficulty: QuestionItem['difficulty'], pyqMode = false) => {
   const tier = Number(difficulty);
+  // PYQ rows only carry Tiers 0–2, shown with the simpler Easy/Medium/Hard scale.
+  if (pyqMode) {
+    if (tier === 0) return 'Easy · Tier 0';
+    if (tier === 1) return 'Medium · Tier 1';
+    return `Hard · Tier ${Number.isFinite(tier) ? tier : 2}`;
+  }
   if (tier <= 1) return `Easy · Tier ${Number.isFinite(tier) ? tier : 0} (Easy band: 0–1)`;
   if (tier === 2) return 'Moderate · Tier 2';
   if (tier === 3) return 'Tough · Tier 3';
@@ -1155,6 +1166,84 @@ export default function PaperGeneratorView({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePreviewScopeKey, bankDataset, competitiveExam, isCombinedPreview, isCompetitive, selectedClass, selectedLang, questionType]);
 
+  // One request body for both the availability preview and real generation, so
+  // the counts shown to the teacher describe exactly what Generate will sample.
+  const remainingSlots = totalQuestions - paperQuestions.length;
+  const bankGenerateBody = useMemo(() => ({
+    class_std: selectedClass,
+    dataset: bankDataset,
+    subject: selectedSubject,
+    subjects: selectedSubjects,
+    topics: selectedTopics,
+    scopes: topicSelections,
+    totalQuestions: remainingSlots,
+    difficultyDistribution: { easy: easyPct, medium: medPct, hard: hardPct },
+    lang: selectedLang,
+    hasImageOnly,
+    pyqOnly,
+    questionType,
+    marksPerQuestion,
+    negativeMarks,
+    assessmentTarget,
+    assessmentType,
+    competitiveExam,
+  }), [assessmentTarget, assessmentType, bankDataset, competitiveExam, easyPct, hardPct, hasImageOnly, marksPerQuestion, medPct, negativeMarks, pyqOnly, questionType, remainingSlots, selectedClass, selectedLang, selectedSubject, selectedSubjects, selectedTopics, topicSelections]);
+
+  // Per-level availability for the Balance step. Debounced because the
+  // teacher types percentages digit by digit.
+  // Stored with the request it answers: counts from an older scope or split are
+  // never shown (or fed to "Adjust split") after the inputs change.
+  const availabilityKey = JSON.stringify(bankGenerateBody);
+  const [availabilityState, setAvailabilityState] = useState<{ key: string; data: DifficultyAvailability } | null>(null);
+  const tierAvailability = availabilityState?.key === availabilityKey ? availabilityState.data : null;
+  const setTierAvailability = (data: DifficultyAvailability | null) => setAvailabilityState(data ? { key: availabilityKey, data } : null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const availabilityReady = builderStep === 3 && difficultyIsValid && remainingSlots > 0
+    && !(assessmentType === 'chapter' && topicSelections.length === 0);
+  useEffect(() => {
+    if (!availabilityReady) return;
+    const controller = new AbortController();
+    const requestKey = JSON.stringify(bankGenerateBody);
+    const timer = window.setTimeout(async () => {
+      setAvailabilityLoading(true);
+      try {
+        const token = localStorage.getItem('arke_token');
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const response = await fetch('/api/paper/generate', {
+          method: 'POST', headers, credentials: 'include', signal: controller.signal,
+          body: JSON.stringify({ ...bankGenerateBody, mode: 'availability' }),
+        });
+        const data = await response.json();
+        if (!controller.signal.aborted) setAvailabilityState(response.ok && data.success ? { key: requestKey, data: data.availability } : null);
+      } catch {
+        // Availability is advisory; Generate still reports any shortfall itself.
+        if (!controller.signal.aborted) setAvailabilityState(null);
+      } finally {
+        if (!controller.signal.aborted) setAvailabilityLoading(false);
+      }
+    }, 400);
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [availabilityReady, bankGenerateBody]);
+
+  const applyFittedSplit = () => {
+    if (!tierAvailability) return;
+    const available = DIFFICULTY_LEVELS.map((level) => tierAvailability.levels[level].available) as [number, number, number];
+    const fitted = fitSplitToAvailability(tierAvailability.requested, [easyPct, medPct, hardPct], available);
+    if (!fitted) {
+      showToast(t('paper.difficulty.notEnoughTotal', {
+        available: available.reduce((sum, value) => sum + value, 0),
+        requested: tierAvailability.requested,
+      }));
+      return;
+    }
+    setEasyPct(fitted[0]);
+    setMedPct(fitted[1]);
+    setHardPct(fitted[2]);
+    setGenerationError(null);
+    showToast(t('paper.difficulty.adjusted', { easy: fitted[0], medium: fitted[1], hard: fitted[2] }));
+  };
+
   // Generate Paper API Call
   const handleGeneratePaper = async () => {
     setGenerationError(null);
@@ -1184,33 +1273,14 @@ export default function PaperGeneratorView({
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({
-          class_std: selectedClass,
-          dataset: bankDataset,
-          subject: selectedSubject,
-          subjects: selectedSubjects,
-          topics: selectedTopics,
-          scopes: topicSelections,
-          totalQuestions: remaining,
-          difficultyDistribution: {
-            easy: easyPct,
-            medium: medPct,
-            hard: hardPct,
-          },
-          lang: selectedLang,
-          hasImageOnly,
-          pyqOnly,
-          questionType,
-          marksPerQuestion,
-          negativeMarks,
-          assessmentTarget,
-          assessmentType,
-          competitiveExam,
-        }),
+        body: JSON.stringify(bankGenerateBody),
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        // A shortfall response carries per-level counts; surface them in the
+        // Balance panel so the teacher can fix the split in one click.
+        if (data.availability) setTierAvailability(data.availability);
         setGenerationError({
           message: data.error || 'Failed to generate question paper from database.',
           available: Number.isFinite(Number(data.available)) ? Number(data.available) : undefined,
@@ -1381,7 +1451,13 @@ export default function PaperGeneratorView({
       if (data.success && Array.isArray(data.questions)) {
         const uniqueQuestions = dedupeQuestions(data.questions);
         setPaperQuestions(uniqueQuestions);
-        showToast(`✓ Paper successfully converted to ${targetLang === 'hi' ? 'Hindi' : 'English'} (${uniqueQuestions.length} Qs)!`);
+        // The server keeps questions with no translation in their original
+        // language instead of silently swapping or relabelling them.
+        if (Number(data.unmatchedCount) > 0) {
+          showToast(t('paper.switchLang.unmatched', { count: Number(data.unmatchedCount), language: t(targetLang === 'hi' ? 'paper.language.hi' : 'paper.language.en') }));
+        } else {
+          showToast(`✓ Paper successfully converted to ${targetLang === 'hi' ? 'Hindi' : 'English'} (${uniqueQuestions.length} Qs)!`);
+        }
       } else {
         showToast(`Error switching paper language: ${data.error || 'Failed'}`);
       }
@@ -1513,6 +1589,11 @@ export default function PaperGeneratorView({
   // Helpers for badge rendering
   const getDifficultyBadge = (diff: any) => {
     const val = String(diff);
+    if (pyqOnly) {
+      if (val === '0') return <span className="badge badge-diff-basic">Easy (Tier 0)</span>;
+      if (val === '1') return <span className="badge badge-diff-easy">Medium (Tier 1)</span>;
+      if (val === '2') return <span className="badge badge-diff-med">Hard (Tier 2)</span>;
+    }
     if (val === '0') return <span className="badge badge-diff-basic">Easy (Tier 0)</span>;
     if (val === '1') return <span className="badge badge-diff-easy">Easy (Tier 1)</span>;
     if (val === '2') return <span className="badge badge-diff-med">Moderate (Tier 2)</span>;
@@ -1570,9 +1651,12 @@ export default function PaperGeneratorView({
     </nav>
   );
 
+  // The server enforces the same rule; hiding the tab keeps the UI honest.
+  const visibleBankDatasets = BANK_DATASETS.filter((source) => !tenant.hiddenDatasets.includes(source.id));
+  const allVisibleCount = visibleBankDatasets.reduce((sum, source) => sum + source.count, 0);
   const bankDatasetTabs = <nav className="paper-studio-source-tabs hide-print" aria-label="Question dataset">
-    {BANK_DATASETS.map((source) => <button key={source.id} type="button" className={bankDataset === source.id ? 'active' : ''} onClick={() => setBankDataset(source.id)}>
-      <b>{source.label}</b><span>{source.detail}</span>
+    {visibleBankDatasets.map((source) => <button key={source.id} type="button" className={bankDataset === source.id ? 'active' : ''} onClick={() => setBankDataset(source.id)}>
+      <b>{source.label}</b><span>{t('paper.dataset.count', { count: (source.id === 'all' ? allVisibleCount : source.count).toLocaleString('en-IN') })}</span>
     </button>)}
   </nav>;
 
@@ -2062,7 +2146,7 @@ export default function PaperGeneratorView({
                     return <article className="topic-preview-card" key={questionKey}>
                       <header>
                         <div><b>Question {index + 1}</b><span>#{question.id}</span></div>
-                        <span className="topic-tier">{question.difficulty !== undefined && question.difficulty !== null ? difficultyBand(question.difficulty) : 'Difficulty pending'}</span>
+                        <span className="topic-tier">{question.difficulty !== undefined && question.difficulty !== null ? difficultyBand(question.difficulty, pyqOnly) : 'Difficulty pending'}</span>
                         <label className="picker-check"><input type="checkbox" checked={isChecked} disabled={isAdded || replacementIndex !== null} onChange={() => setCheckedPreviewIds(previous => previous.includes(questionKey) ? previous.filter(id => id !== questionKey) : [...previous, questionKey])}/><span>Select</span></label>
                       </header>
                       <MathRenderer content={question.question} className="topic-question-stem" />
@@ -2179,16 +2263,16 @@ export default function PaperGeneratorView({
                 <div className="ratio-header-row">
                   <span className="ratio-title">Difficulty Distribution</span>
                   <span className={`ratio-subtitle ${difficultyIsValid ? '' : 'ratio-total-invalid'}`} role="status">
-                    Easy: {easyPct}% • Moderate: {medPct}% • Tough: {hardPct}%
+                    Easy: {easyPct}% • {pyqOnly ? 'Medium' : 'Moderate'}: {medPct}% • {pyqOnly ? 'Hard' : 'Tough'}: {hardPct}%
                   </span>
                 </div>
 
                 <div className="difficulty-inputs" aria-label="Set exact difficulty percentages">
-                  <p>Exact difficulty bands: Easy = Tier 0–1, Moderate = Tier 2, Tough = {includesExpertTier ? 'Tier 3–4' : 'Tier 3 only'}. The generator never substitutes another level.</p>
+                  <p>{pyqOnly ? 'PYQ mapping: Easy = Tier 0, Medium = Tier 1, Hard = Tier 2.' : `Exact difficulty bands: Easy = Tier 0–1, Moderate = Tier 2, Tough = ${includesExpertTier ? 'Tier 3–4' : 'Tier 3 only'}.`} The generator never substitutes another level.</p>
                   {([
-                    ['easy', 'Easy (Tier 0–1)', easyPct],
-                    ['medium', 'Moderate (Tier 2)', medPct],
-                    ['hard', includesExpertTier ? 'Tough (Tier 3–4)' : 'Tough (Tier 3)', hardPct],
+                    ['easy', pyqOnly ? 'Easy (Tier 0)' : 'Easy (Tier 0–1)', easyPct],
+                    ['medium', pyqOnly ? 'Medium (Tier 1)' : 'Moderate (Tier 2)', medPct],
+                    ['hard', pyqOnly ? 'Hard (Tier 2)' : (includesExpertTier ? 'Tough (Tier 3–4)' : 'Tough (Tier 3)'), hardPct],
                   ] as const).map(([level, label, value]) => (
                     <label className={`difficulty-input difficulty-input-${level}`} key={level}>
                       <span>{label}</span>
@@ -2209,6 +2293,29 @@ export default function PaperGeneratorView({
                     Total: {difficultyTotal}%{difficultyIsValid ? ' — ready' : ' — adjust to 100%'}
                   </span>
                 </div>
+
+                {availabilityReady && (availabilityLoading || tierAvailability) && (
+                  <div className="difficulty-availability" role="status" aria-live="polite">
+                    <span className="difficulty-availability-title">{t('paper.difficulty.availabilityTitle')}</span>
+                    {availabilityLoading && !tierAvailability ? <span>{t('paper.difficulty.checking')}</span> : tierAvailability && <>
+                      <ul>
+                        {DIFFICULTY_LEVELS.map((level) => {
+                          const { needed, available } = tierAvailability.levels[level];
+                          const label = t(pyqOnly ? `paper.difficulty.labelPyq.${level}` : `paper.difficulty.label.${level}`);
+                          const short = available < needed;
+                          return <li key={level} className={short ? 'is-short' : needed ? 'is-ok' : 'is-unused'}>
+                            {needed === 0
+                              ? t('paper.difficulty.levelUnused', { label })
+                              : short
+                                ? t('paper.difficulty.levelShort', { label, needed, available })
+                                : t('paper.difficulty.levelOk', { label, needed })}
+                          </li>;
+                        })}
+                      </ul>
+                      {hasShortfall(tierAvailability) && <button type="button" className="difficulty-adjust-button" onClick={applyFittedSplit}>{t('paper.difficulty.adjust')}</button>}
+                    </>}
+                  </div>
+                )}
 
                 <div className="ratio-visual-bar">
                   <div className="bar-seg seg-easy" style={{ width: `${easyPct}%` }}>Easy {easyPct}%</div>

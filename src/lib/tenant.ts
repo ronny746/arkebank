@@ -12,6 +12,8 @@ export type TenantBrand = {
   logoIncludesWordmark?: boolean;
   paperInstituteName: string;
   paperFooterText: string;
+  /** Question datasets this portal must never show (bank, preview, generation). */
+  hiddenDatasets: string[];
 };
 
 const brands: Record<TenantId, TenantBrand> = {
@@ -26,6 +28,8 @@ const brands: Record<TenantId, TenantBrand> = {
     logoHeight: 50,
     paperInstituteName: 'ARKE SCHOLARS ACADEMY',
     paperFooterText: 'ARKE SCHOLARS ASSESSMENT SYSTEM',
+    // Business rule: TestlyPro content is licensed for Prepzo only.
+    hiddenDatasets: ['testlypro'],
   },
   prepzo: {
     id: 'prepzo',
@@ -39,8 +43,42 @@ const brands: Record<TenantId, TenantBrand> = {
     logoIncludesWordmark: true,
     paperInstituteName: 'Prepzo',
     paperFooterText: 'PREPZO ASSESSMENT SYSTEM',
+    hiddenDatasets: [],
   },
 };
+
+/**
+ * Applies the tenant's dataset visibility to a questions query. Always derive
+ * `tenantId` from the verified token, never from the request body, so a client
+ * cannot ask for a dataset its portal must not show.
+ */
+export function applyTenantDatasetScope<T extends Record<string, unknown>>(
+  query: T,
+  tenantId: TenantId,
+  requestedDataset?: unknown,
+): T {
+  const hidden = brands[tenantId].hiddenDatasets;
+  const requested = typeof requestedDataset === 'string' && requestedDataset && requestedDataset !== 'all'
+    ? requestedDataset
+    : null;
+  const scoped: Record<string, unknown> = query;
+  if (requested) {
+    // An explicitly requested hidden dataset matches nothing rather than erroring,
+    // so stale browser state degrades to an empty result.
+    scoped.dataset = hidden.includes(requested) ? { $in: [] } : requested;
+  } else if (hidden.length) {
+    scoped.dataset = { $nin: hidden };
+  }
+  return query;
+}
+
+export function isDatasetHiddenForTenant(tenantId: TenantId, dataset: unknown): boolean {
+  return typeof dataset === 'string' && brands[tenantId].hiddenDatasets.includes(dataset);
+}
+
+export function tenantHiddenDatasets(tenantId: TenantId): string[] {
+  return brands[tenantId].hiddenDatasets;
+}
 
 export function getTenantForHost(host: string | null | undefined): TenantBrand {
   const hostname = String(host || '').toLowerCase().split(':')[0];

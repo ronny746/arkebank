@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { keepTeacherSafeQuestions } from '@/lib/question-quality';
+import { questionIdVariants } from '@/lib/question-ids';
+import { applyTenantDatasetScope } from '@/lib/tenant';
 
 export async function POST(req: Request) {
   try {
@@ -27,15 +29,21 @@ export async function POST(req: Request) {
     } = body;
 
     const matchQuery: Record<string, any> = {};
+    // Only plain strings reach the query; an object here could inject operators.
+    const text = (value: unknown) => (typeof value === 'string' && value && value !== 'all' ? value : null);
 
-    if (class_std && class_std !== 'all') matchQuery.class_std = class_std;
-    if (subject && subject !== 'all') matchQuery.subject = subject;
-    if (topic && topic !== 'all') matchQuery.topic = topic;
-    if (difficulty && difficulty !== 'all') matchQuery.difficulty = String(difficulty);
-    if (lang && lang !== 'all') matchQuery.lang = lang;
+    if (text(class_std)) matchQuery.class_std = class_std;
+    if (text(subject)) matchQuery.subject = subject;
+    if (text(topic)) matchQuery.topic = topic;
+    if (typeof difficulty === 'number' || text(difficulty)) matchQuery.difficulty = String(difficulty);
+    if (text(lang)) matchQuery.lang = lang;
+    applyTenantDatasetScope(matchQuery, authUser.tenantId);
 
-    if (Array.isArray(excludeIds) && excludeIds.length > 0) {
-      matchQuery._id = { $nin: excludeIds };
+    // Paper ids arrive as strings, but third-dataset rows use ObjectId `_id`s;
+    // without both forms the "replacement" could be a question already on the paper.
+    const excluded = questionIdVariants(excludeIds);
+    if (excluded.length > 0) {
+      matchQuery._id = { $nin: excluded };
     }
 
     const { db } = await connectToDatabase();

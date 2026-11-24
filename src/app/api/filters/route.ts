@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { cached } from '@/lib/cache';
 import { QUESTION_TYPE_OPTIONS, withQuestionType } from '@/lib/question-types';
+import { applyTenantDatasetScope, tenantHiddenDatasets } from '@/lib/tenant';
 
 export async function GET(req: Request) {
   try {
@@ -37,7 +38,8 @@ export async function GET(req: Request) {
       .sort()
       .join('|') || 'none';
 
-    const cacheKey = `filters:${dataset || 'all'}:${class_std || 'all'}:${subject || 'all'}:${topic || 'all'}:${scopeKey}:${withQuestions}:${formatScope || 'standard'}:${lang || 'all'}`;
+    // Visible datasets differ per portal, so the tenant is part of the cache key.
+    const cacheKey = `filters:${authUser.tenantId}:${dataset || 'all'}:${class_std || 'all'}:${subject || 'all'}:${topic || 'all'}:${scopeKey}:${withQuestions}:${formatScope || 'standard'}:${lang || 'all'}`;
 
     // Cache filters response in Redis/in-memory for 15 minutes (900 seconds)
     const result = await cached(cacheKey, 900, async () => {
@@ -48,7 +50,7 @@ export async function GET(req: Request) {
       // 1. Paper Studio must not offer empty streams. The bank can show the
       // complete taxonomy, but generator choices must have usable records.
       const classQuestionScope: Record<string, unknown> = {};
-      if (dataset && dataset !== 'all') classQuestionScope.dataset = dataset;
+      applyTenantDatasetScope(classQuestionScope, authUser.tenantId, dataset);
       if (lang && lang !== 'all') classQuestionScope.lang = lang;
       const dynamicClasses = (withQuestions
         ? await questionsCol.distinct('class_std', classQuestionScope)
@@ -72,7 +74,7 @@ export async function GET(req: Request) {
         syllabusQuery.class_std = class_std;
       }
       const questionScope: Record<string, unknown> = {};
-      if (dataset && dataset !== 'all') questionScope.dataset = dataset;
+      applyTenantDatasetScope(questionScope, authUser.tenantId, dataset);
       // Competitive full/part tests cover Class 11 + 12 material. Their
       // dedicated JA/JM/NEET buckets are retained, but are not the only
       // source because many valid hard questions live in the class buckets.
@@ -180,13 +182,25 @@ export async function GET(req: Request) {
       }
 
       // 4. Fetch distinct years (sorted descending)
-      const rawYears = await questionsCol.distinct('year');
+      // A `$nin` filter on distinct would scan millions of rows, so take the
+      // index-backed distinct and then drop years that exist only in datasets
+      // this portal hides (one bounded, indexed check per year).
+      const hiddenForYears = tenantHiddenDatasets(authUser.tenantId);
+      const candidateYears = (await questionsCol.distinct('year')).filter((y: unknown) => typeof y === 'number' && y > 1990);
+      const rawYears = hiddenForYears.length
+        ? (await Promise.all(candidateYears.map(async (y: number) =>
+            (await questionsCol.countDocuments({ year: y, dataset: { $nin: hiddenForYears } }, { limit: 1 })) ? y : null)))
+            .filter((y): y is number => y !== null)
+        : candidateYears;
       const validYears = rawYears
         .filter((y: any) => typeof y === 'number' && y > 1990)
         .sort((a: number, b: number) => b - a);
 
-      // Dynamic total question count using fast metadata
-      const totalQuestions = await questionsCol.estimatedDocumentCount();
+      // Dynamic total question count using fast metadata, minus datasets this
+      // portal hides (an indexed count, far cheaper than a filtered full count).
+      const hidden = tenantHiddenDatasets(authUser.tenantId);
+      const totalQuestions = Math.max(0, (await questionsCol.estimatedDocumentCount())
+        - (hidden.length ? await questionsCol.countDocuments({ dataset: { $in: hidden } }) : 0));
 
       return {
         classes: sortedClasses,

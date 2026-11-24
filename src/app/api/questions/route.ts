@@ -4,6 +4,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { withQuestionType } from '@/lib/question-types';
 import { keepTeacherSafeQuestions } from '@/lib/question-quality';
+import { applyTenantDatasetScope, tenantHiddenDatasets } from '@/lib/tenant';
 
 export async function GET(req: Request) {
   try {
@@ -63,7 +64,7 @@ export async function GET(req: Request) {
     const subTopics = searchParams.getAll('sub_topic').filter(Boolean);
 
     const query: any = {};
-    if (dataset && dataset !== 'all') query.dataset = dataset;
+    applyTenantDatasetScope(query, authUser.tenantId, dataset);
 
     const isCompetitiveAssessment = format_scope === 'assessment'
       && ['JA', 'JM', 'NEET', 'JEE Main', 'JEE Advanced', 'Competitive Exam'].includes(class_std || '');
@@ -133,11 +134,25 @@ export async function GET(req: Request) {
     const questionsCol = db.collection('questions');
 
     const isUnfiltered = Object.keys(query).length === 0;
+    // A portal that hides datasets always carries a `$nin` scope. Counting that
+    // across ~3.5M rows is slow, so derive it from metadata minus the (indexed)
+    // hidden-dataset count instead.
+    const hidden = tenantHiddenDatasets(authUser.tenantId);
+    const onlyTenantScope = Object.keys(query).length === 1 && hidden.length > 0
+      && typeof query.dataset === 'object' && query.dataset !== null && '$nin' in query.dataset;
 
     // Fast count: estimatedDocumentCount for unfiltered, cached count for filtered queries
     const countPromise = isUnfiltered
       ? questionsCol.estimatedDocumentCount()
-      : cached(`qcount:${JSON.stringify(query)}`, 600, () => questionsCol.countDocuments(query));
+      : onlyTenantScope
+        ? cached(`qcount:visible:${authUser.tenantId}`, 600, async () => {
+            const [all, hiddenCount] = await Promise.all([
+              questionsCol.estimatedDocumentCount(),
+              questionsCol.countDocuments({ dataset: { $in: hidden } }),
+            ]);
+            return Math.max(0, all - hiddenCount);
+          })
+        : cached(`qcount:${JSON.stringify(query)}`, 600, () => questionsCol.countDocuments(query));
 
     // Cursor pagination avoids MongoDB walking every previous result for deep
     // pages. We keep page/skip as a compatibility mode for existing callers.

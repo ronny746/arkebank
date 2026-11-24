@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { getTeacherVisibleQuestionIssue, keepTeacherSafeQuestions } from '@/lib/question-quality';
+import { applyTenantDatasetScope, isDatasetHiddenForTenant } from '@/lib/tenant';
 
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!extractAndVerifyToken(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const authUser = extractAndVerifyToken(req);
+    if (!authUser) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     const { id } = await context.params;
     const { db } = await connectToDatabase();
     const numericId = Number(id);
@@ -16,7 +18,8 @@ export async function GET(
       ? { $or: [{ _id: id }, { id }] }
       : { $or: [{ _id: id }, { id: numericId }] };
     const question = await db.collection('questions').findOne(filter);
-    if (!question) return NextResponse.json({ success: false, error: 'Question not found.' }, { status: 404 });
+    // A dataset hidden from this portal is reported exactly like a missing record.
+    if (!question || isDatasetHiddenForTenant(authUser.tenantId, question.dataset)) return NextResponse.json({ success: false, error: 'Question not found.' }, { status: 404 });
     if (getTeacherVisibleQuestionIssue(question)) {
       await keepTeacherSafeQuestions(db, [question]);
       return NextResponse.json({ success: false, error: 'This question is hidden because its source formatting needs administrator review.' }, { status: 422 });
@@ -96,6 +99,8 @@ export async function PATCH(
     updateFields.updated_at = new Date();
 
     const filter: any = isNaN(Number(id)) ? { _id: id } : { $or: [{ _id: id }, { id: Number(id) }] };
+    // Editing is access too: a portal cannot modify a dataset it must not show.
+    applyTenantDatasetScope(filter, authUser.tenantId);
 
     const result = await questionsCol.findOneAndUpdate(
       filter,

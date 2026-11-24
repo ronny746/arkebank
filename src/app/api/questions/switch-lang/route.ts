@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { keepTeacherSafeQuestions } from '@/lib/question-quality';
+import { pairingIdCandidates } from '@/lib/question-ids';
+import { applyTenantDatasetScope } from '@/lib/tenant';
 
 export async function POST(req: Request) {
   try {
@@ -26,31 +28,33 @@ export async function POST(req: Request) {
     const { db } = await connectToDatabase();
     const questionsCol = db.collection('questions');
 
-    const numId = Number(questionId);
+    const scoped = (query: Record<string, unknown>) => applyTenantDatasetScope(query, authUser.tenantId);
 
-    // 1. Try finding paired counterpart with same numeric id and targetLang
+    // 1. The true translation shares the pairing `id`. Third-dataset ids are
+    // strings ("EM0000015"); a numeric-only lookup missed every one of them.
     let matchedDoc = null;
-    if (numId) {
-      matchedDoc = await questionsCol.findOne({ id: numId, lang: targetLang });
+    const idCandidates = pairingIdCandidates(questionId);
+    if (idCandidates.length) {
+      matchedDoc = await questionsCol.findOne(scoped({ id: { $in: idCandidates }, lang: targetLang }));
     }
 
-    // 2. If not found by numeric id, try finding by subject, topic & difficulty
-    if (!matchedDoc && subject) {
-      const query: any = { subject, lang: targetLang };
-      if (topic) query.topic = topic;
-      if (difficulty !== undefined && difficulty !== null) query.difficulty = String(difficulty);
+    // 2. If not found by id, try finding by subject, topic & difficulty
+    if (!matchedDoc && typeof subject === 'string' && subject) {
+      const query: Record<string, unknown> = { subject, lang: targetLang };
+      if (typeof topic === 'string' && topic) query.topic = topic;
+      if (typeof difficulty === 'string' || typeof difficulty === 'number') query.difficulty = String(difficulty);
 
-      matchedDoc = await questionsCol.findOne(query);
+      matchedDoc = await questionsCol.findOne(scoped(query));
 
       // Fallback: subject + targetLang only
       if (!matchedDoc) {
-        matchedDoc = await questionsCol.findOne({ subject, lang: targetLang });
+        matchedDoc = await questionsCol.findOne(scoped({ subject, lang: targetLang }));
       }
     }
 
     // 3. Fallback: any question in targetLang
     if (!matchedDoc) {
-      matchedDoc = await questionsCol.findOne({ lang: targetLang });
+      matchedDoc = await questionsCol.findOne(scoped({ lang: targetLang }));
     }
 
     if (!matchedDoc) {

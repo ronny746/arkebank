@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { extractAndVerifyToken } from '@/lib/auth-token';
 import { getTeacherVisibleQuestionIssue, keepTeacherSafeQuestions } from '@/lib/question-quality';
+import { pairingIdCandidates, questionIdVariants } from '@/lib/question-ids';
+import { applyTenantDatasetScope } from '@/lib/tenant';
+
+// Paper questions arrive from the browser; treat every field as untrusted.
+type IncomingQuestion = Record<string, unknown>;
 
 export async function POST(req: Request) {
   try {
@@ -22,40 +27,68 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    // Each question costs up to three lookups; papers top out at 180 questions.
+    if (questions.length > 200) {
+      return NextResponse.json({ success: false, error: 'Invalid input. questions array and targetLang ("en" | "hi") required.' }, { status: 400 });
+    }
 
     const { db } = await connectToDatabase();
     const questionsCol = db.collection('questions');
 
-    const updatedQuestions = await Promise.all(
-      questions.map(async (q: any) => {
-        // If already in target language, keep it
-        if (q.lang === targetLang) return getTeacherVisibleQuestionIssue(q) ? null : q;
+    // Questions are matched sequentially (not Promise.all) so every pick can
+    // exclude rows already used. Previously several English questions without
+    // an exact twin resolved to the same Hindi row and the client then
+    // silently de-duplicated the paper down to fewer questions.
+    const usedIds = new Set<string>(
+      (questions as IncomingQuestion[]).filter((q) => q?.lang === targetLang).map((q) => String(q._id || q.id)),
+    );
+    let unmatchedCount = 0;
+    const scoped = (query: Record<string, unknown>, dataset?: unknown) => {
+      const variants = questionIdVariants([...usedIds]);
+      return applyTenantDatasetScope(variants.length ? { ...query, _id: { $nin: variants } } : query, authUser.tenantId, dataset);
+    };
+    const text = (value: unknown) => (typeof value === 'string' && value ? value : null);
 
-        const numId = Number(q.id);
+    const updatedQuestions: Array<IncomingQuestion | null> = [];
+    for (const q of questions as IncomingQuestion[]) {
+      updatedQuestions.push(await (async () => {
+        // If already in target language, keep it
+        if (q.lang === targetLang) return getTeacherVisibleQuestionIssue(q as Parameters<typeof getTeacherVisibleQuestionIssue>[0]) ? null : q;
+
         let match = null;
 
-        // 1. Try finding counterpart by same numeric id
-        if (numId) {
-          match = await questionsCol.findOne({ id: numId, lang: targetLang });
+        // 1. The real translation shares the pairing `id` within the same
+        // dataset. Third-dataset ids are strings, which a numeric-only
+        // lookup never found.
+        const idCandidates = pairingIdCandidates(q.id);
+        if (idCandidates.length) {
+          const pairQuery: Record<string, unknown> = { id: { $in: idCandidates }, lang: targetLang };
+          // Same dataset only (numeric ids repeat across banks); the scope helper
+          // still refuses a dataset this portal hides.
+          match = await questionsCol.findOne(scoped(pairQuery, text(q.dataset)));
         }
 
         // 2. If no direct pair, find same subject, topic, difficulty
-        if (!match && q.subject) {
-          const query: any = { subject: q.subject, lang: targetLang };
-          if (q.topic) query.topic = q.topic;
-          if (q.difficulty !== undefined && q.difficulty !== null) query.difficulty = String(q.difficulty);
+        if (!match && text(q.subject)) {
+          const query: Record<string, unknown> = { subject: q.subject, lang: targetLang };
+          if (text(q.topic)) query.topic = q.topic;
+          if (typeof q.difficulty === 'string' || typeof q.difficulty === 'number') query.difficulty = String(q.difficulty);
 
-          match = await questionsCol.findOne(query);
+          match = await questionsCol.findOne(scoped(query));
 
           if (!match) {
-            match = await questionsCol.findOne({ subject: q.subject, lang: targetLang });
+            match = await questionsCol.findOne(scoped({ subject: q.subject, lang: targetLang }));
           }
         }
 
         if (!match) {
-          // If no match found, keep current question but update lang flag
-          return { ...q, lang: targetLang };
+          // Keep the question exactly as it is. Relabelling an English question
+          // as Hindi (the old behaviour) misled faculty about the paper's language.
+          unmatchedCount += 1;
+          usedIds.add(String(q._id || q.id));
+          return q;
         }
+        usedIds.add(String(match._id || match.id));
 
         const [safeMatch] = await keepTeacherSafeQuestions(db, [match]);
         if (!safeMatch) return null;
@@ -64,6 +97,8 @@ export async function POST(req: Request) {
           _id: safeMatch._id ? String(safeMatch._id) : `${safeMatch.id}_${targetLang}`,
           id: safeMatch.id,
           pyq_id: safeMatch.pyq_id || 0,
+          // Kept so a later switch back can pair within the same dataset.
+          dataset: safeMatch.dataset || q.dataset,
           lang: safeMatch.lang || targetLang,
           class_std: safeMatch.class_std || q.class_std,
           subject: safeMatch.subject || q.subject,
@@ -86,8 +121,8 @@ export async function POST(req: Request) {
           marks: q.marks || 4,
           negative_marks: q.negative_marks || 1,
         };
-      })
-    );
+      })());
+    }
 
     const visibleQuestions = updatedQuestions.filter(Boolean);
     if (visibleQuestions.length !== questions.length) {
@@ -96,6 +131,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       questions: visibleQuestions,
+      unmatchedCount,
     });
   } catch (error: any) {
     console.error('paper switch-lang error:', error);

@@ -38,6 +38,7 @@ import SidebarFiltersSkeleton from '@/components/SidebarFiltersSkeleton';
 import { getTenantForHost, type TenantBrand } from '@/lib/tenant';
 
 type PortalView = 'dashboard' | 'bank' | 'generator' | 'saved' | 'exams';
+type DatasetId = 'all' | 'core_en_hi' | 'testlypro' | 'third_dataset' | 'pyq';
 
 const portalPath: Record<PortalView, string> = {
   dashboard: '/', bank: '/question-bank', generator: '/paper-generator', saved: '/saved-papers', exams: '/exams',
@@ -64,7 +65,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
 
   // Active Filter Controls (All cleanly managed in the Sidebar)
   const [selectedClass, setSelectedClass] = useState<string>('all');
-  const [selectedDataset, setSelectedDataset] = useState<'all' | 'core_en_hi' | 'testlypro' | 'third_dataset'>('all');
+  const [selectedDataset, setSelectedDataset] = useState<DatasetId>('all');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
   const [selectedSubTopic, setSelectedSubTopic] = useState<string>('all');
@@ -512,8 +513,8 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
                   <label className="filter-group-label">QUESTION SOURCE</label>
                   <div className="pill-grid">
                     {[
-                      ['all', 'All datasets'], ['core_en_hi', 'Core EN/HI'], ['testlypro', 'TestlyPro'], ['third_dataset', 'Third dataset'],
-                    ].map(([value, label]) => <button key={value} type="button" onClick={() => { setSelectedDataset(value as 'all' | 'core_en_hi' | 'testlypro' | 'third_dataset'); setSelectedSubject('all'); setSelectedTopic('all'); setSelectedSubTopic('all'); }} className={`pill-option ${selectedDataset === value ? 'active' : ''}`}>{label}</button>)}
+                      ['all', 'All datasets'], ['core_en_hi', 'Core EN/HI'], ['testlypro', 'TestlyPro'], ['third_dataset', 'Third dataset'], ['pyq', 'PYQ'],
+                    ].filter(([value]) => !tenant.hiddenDatasets.includes(value)).map(([value, label]) => <button key={value} type="button" onClick={() => { setSelectedDataset(value as DatasetId); setSelectedSubject('all'); setSelectedTopic('all'); setSelectedSubTopic('all'); }} className={`pill-option ${selectedDataset === value ? 'active' : ''}`}>{label}</button>)}
                   </div>
                 </div>
                 <div className="filter-group">
@@ -784,7 +785,7 @@ export default function Home({ initialTab = 'dashboard', paperId }: { initialTab
                     </span>
                   )}
                   {selectedDataset !== 'all' && (
-                    <span className="filter-chip"><span>Source: {selectedDataset === 'core_en_hi' ? 'Core EN/HI' : selectedDataset === 'testlypro' ? 'TestlyPro' : 'Third dataset'}</span><button onClick={() => setSelectedDataset('all')}><X size={11} /></button></span>
+                    <span className="filter-chip"><span>Source: {selectedDataset === 'core_en_hi' ? 'Core EN/HI' : selectedDataset === 'testlypro' ? 'TestlyPro' : selectedDataset === 'pyq' ? 'PYQ' : 'Third dataset'}</span><button onClick={() => setSelectedDataset('all')}><X size={11} /></button></span>
                   )}
                   {selectedSubject !== 'all' && (
                     <span className="filter-chip">

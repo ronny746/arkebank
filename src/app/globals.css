@@ -3799,6 +3799,40 @@ body {
 .difficulty-total.is-invalid, .ratio-total-invalid { color: #B42318; }
 .difficulty-total.is-invalid { background: #FFF1F2; }
 
+/* Per-level availability under the difficulty inputs (Balance step). */
+.difficulty-availability {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  background: #F8FAFC;
+  font-size: .72rem;
+  color: #475569;
+}
+.difficulty-availability-title { font-weight: 800; color: #0F172A; }
+.difficulty-availability ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.difficulty-availability li { font-weight: 700; }
+.difficulty-availability li.is-ok { color: #087A46; }
+.difficulty-availability li.is-short { color: #B42318; }
+.difficulty-availability li.is-unused { color: #94A3B8; font-weight: 600; }
+.difficulty-adjust-button {
+  justify-self: start;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid #B42318;
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: #B42318;
+  font-size: .72rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.difficulty-adjust-button:hover { background: #B42318; color: #FFFFFF; }
+.difficulty-adjust-button:focus-visible { outline: 2px solid #B42318; outline-offset: 2px; }
+
 @media (max-width: 860px) {
   .difficulty-inputs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .difficulty-inputs > p, .difficulty-total { grid-column: 1 / -1; }
@@ -5092,6 +5126,7 @@ body {
 .paper-card-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
 }

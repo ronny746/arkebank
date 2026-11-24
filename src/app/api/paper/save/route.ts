@@ -45,7 +45,9 @@ export async function POST(req: Request) {
     const papersCol = db.collection('papers');
 
     await delCachePattern('papers:*');
-    await delCache(`paper:id:${paperId}`);
+    // Must match the key GET /api/paper/saved/[id] writes, or reopening the
+    // paper within the cache TTL shows the pre-edit copy.
+    await delCache(`paper:${authUser.tenantId}:id:${paperId}`);
 
     await papersCol.updateOne(
       { id: paperId, ...tenantDocumentQuery(authUser.tenantId) },

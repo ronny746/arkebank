@@ -1,0 +1,22 @@
+{
+  "paper.dataset.count": "{count} questions",
+  "paper.difficulty.availabilityTitle": "Questions available for this scope",
+  "paper.difficulty.checking": "Checking question availability…",
+  "paper.difficulty.levelOk": "{label}: {needed} needed · enough available",
+  "paper.difficulty.levelShort": "{label}: {needed} needed · only {available} available",
+  "paper.difficulty.levelUnused": "{label}: not used in this split",
+  "paper.difficulty.adjust": "Adjust split to available questions",
+  "paper.difficulty.adjusted": "Split adjusted to {easy}% / {medium}% / {hard}% so every level has enough questions.",
+  "paper.difficulty.notEnoughTotal": "Only {available} of {requested} questions exist across all levels for this scope. Add chapters or lower the question count.",
+  "paper.difficulty.label.easy": "Easy",
+  "paper.difficulty.label.medium": "Moderate",
+  "paper.difficulty.label.hard": "Tough",
+  "paper.difficulty.labelPyq.easy": "Easy",
+  "paper.difficulty.labelPyq.medium": "Medium",
+  "paper.difficulty.labelPyq.hard": "Hard",
+  "paper.language.en": "English",
+  "paper.language.hi": "हिंदी",
+  "paper.switchLang.unmatched": "{count} questions have no {language} version, so they were kept in their original language.",
+  "api.paper.shortfall": "Not enough questions for this difficulty split: {details}. Use “Adjust split” or change the scope.",
+  "api.paper.shortfallLevel": "{label} {available}/{needed}"
+}
