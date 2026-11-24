@@ -1281,6 +1281,9 @@ export default function PaperGeneratorView({
         // A shortfall response carries per-level counts; surface them in the
         // Balance panel so the teacher can fix the split in one click.
         if (data.availability) setTierAvailability(data.availability);
+        // Errors and the per-level "Adjust split" panel live in Step 3, so an
+        // auto-select started from Step 2 must land there to be actionable.
+        setBuilderStep(3);
         setGenerationError({
           message: data.error || 'Failed to generate question paper from database.',
           available: Number.isFinite(Number(data.available)) ? Number(data.available) : undefined,
@@ -1310,6 +1313,7 @@ export default function PaperGeneratorView({
         throw new Error('No questions found matching criteria.');
       }
     } catch (err: any) {
+      setBuilderStep(3);
       setGenerationError({ message: err?.message || 'Could not generate the paper. Please try again.' });
     } finally {
       setGenerating(false);
@@ -2068,6 +2072,29 @@ export default function PaperGeneratorView({
                   </div>
                 </div>
 
+                {replacementIndex === null && hasRequiredChapterScope && (
+                  <div className="auto-select-banner" role="region" aria-label={t('paper.autoSelect.title')}>
+                    <div className="auto-select-copy">
+                      <b>{t('paper.autoSelect.title')}</b>
+                      <span>
+                        {remainingSlots > 0
+                          ? t(assessmentType === 'chapter' ? 'paper.autoSelect.summary' : 'paper.autoSelect.summaryFull', { count: remainingSlots, chapters: topicSelections.length, easy: easyPct, medium: medPct, hard: hardPct })
+                          : t('paper.autoSelect.full', { count: paperQuestions.length })}
+                      </span>
+                      <small>{t('paper.autoSelect.manualHint')}</small>
+                    </div>
+                    <div className="auto-select-actions">
+                      <button type="button" className="auto-select-primary" onClick={() => void handleGeneratePaper()} disabled={generating || !difficultyIsValid}>
+                        <Sparkles size={16} />
+                        {generating ? t('paper.autoSelect.working') : remainingSlots > 0 ? t('paper.autoSelect.cta', { count: remainingSlots }) : t('paper.autoSelect.openPaper')}
+                      </button>
+                      {/* Not openBalanceStep: that shrinks the target to the hand-picked
+                          count, which would contradict the count this banner promises. */}
+                      {remainingSlots > 0 && <button type="button" className="btn-text-action" onClick={() => setBuilderStep(3)}>{t('paper.autoSelect.changeSplit')}</button>}
+                    </div>
+                  </div>
+                )}
+
                 <div className="chapter-question-split">
                   <aside className="chapter-list-panel" aria-label="Chapter list">
                     <div className="picker-subject-tabs" aria-label="Subjects with available questions">
@@ -2127,13 +2154,10 @@ export default function PaperGeneratorView({
                       <button type="button" onClick={() => setBuilderStep(1)}>Change</button>
                     </div>}
                     <div className="topic-preview-actions">
-                      <div className="slots-inline-bar slots-readonly" title="Target slots set in Blueprint">
-                        <span className="slots-inline-label">Target Slots:</span>
-                        <b>{totalQuestions}</b><small>Set in Blueprint</small>
-                        <button type="button" onClick={() => setBuilderStep(1)}>Change</button>
-                      </div>
                       {replacementIndex === null && checkedPreviewIds.length > 0 && <button type="button" className="add-topic-preview" onClick={handleAddCheckedPreviewQuestions}>Add checked ({checkedPreviewIds.length})</button>}
-                      {replacementIndex === null && hasPreviewScope && <button type="button" className="fill-topic-preview" onClick={() => void handleFillFromPreviewTopic()} disabled={generating || paperQuestions.length >= totalQuestions}>{generating ? 'Adding…' : `${isCombinedPreview ? 'Fill selected scope' : 'Add chapter'} · ${Math.max(0, totalQuestions - paperQuestions.length)} slots`}</button>}
+                      {/* The whole-scope auto fill is the banner's primary action; this
+                          stays only as a per-chapter shortcut. */}
+                      {replacementIndex === null && hasPreviewScope && !isCombinedPreview && <button type="button" className="fill-topic-preview" onClick={() => void handleFillFromPreviewTopic()} disabled={generating || paperQuestions.length >= totalQuestions}>{generating ? 'Adding…' : `Add chapter · ${Math.max(0, totalQuestions - paperQuestions.length)} slots`}</button>}
                       {replacementIndex === null && hasPreviewScope && <button type="button" className="remove-topic-preview" onClick={handleRemovePreviewTopicQuestions}>Remove {isCombinedPreview ? 'selected scope' : 'chapter'}{previewTopicQuestionCount ? ` (${previewTopicQuestionCount})` : ''}</button>}
                       {replacementIndex !== null && <button type="button" className="fill-topic-preview" onClick={() => { setReplacementIndex(null); setBuilderMode('edit'); setStudioTab('editor'); }}>Cancel replace</button>}
                       {hasPreviewScope && replacementIndex === null && <button type="button" onClick={() => { setPreviewTopic(''); setPreviewSelectedScope(false); }}>Close</button>}
