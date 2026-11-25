@@ -94,13 +94,21 @@ export async function GET(req: Request) {
       // chapter list happens to be showing another subject.
       const typeScope: Record<string, unknown> = { ...questionScope };
       if (formatScope !== 'assessment' && subject && subject !== 'all') typeScope.subject = subject;
-      const typeCounts = await Promise.all(
+      // Only existence matters here. Full counts took 15–28 s each on the
+      // unfiltered bank (the True/False check regex-scans every question);
+      // a findOne stops at the first match and returns in milliseconds.
+      // On a timeout the format is listed anyway: offering a format is
+      // harmless, while blocking the whole taxonomy response is not.
+      const typeAvailability = await Promise.all(
         QUESTION_TYPE_OPTIONS.filter((item) => item.id !== 'all').map(async (item) => ({
           id: item.id,
-          count: await questionsCol.countDocuments(withQuestionType(typeScope, item.id)),
+          exists: await questionsCol
+            .findOne(withQuestionType(typeScope, item.id), { projection: { _id: 1 }, maxTimeMS: 3000 })
+            .then(Boolean)
+            .catch(() => true),
         })),
       );
-      const questionTypes = ['all', ...typeCounts.filter((item) => item.count > 0).map((item) => item.id)];
+      const questionTypes = ['all', ...typeAvailability.filter((item) => item.exists).map((item) => item.id)];
 
       // 3. Fetch dynamic topics/chapters and subtopics from precomputed syllabus
       let topics: string[] = [];

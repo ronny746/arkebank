@@ -214,9 +214,12 @@ export async function POST(req: Request) {
     const collectedIds = new Set<string>();
     const allQuestions: any[] = [];
 
-    for (const level of DIFFICULTY_LEVELS) {
-      if (levelTargets[level] <= 0) continue;
-      const docs = await sampleTier({ $in: levelTiers[level] }, levelTargets[level], Array.from(collectedIds));
+    // Levels match disjoint difficulty tiers, so they cannot pick the same
+    // question and can be sampled in parallel (~0.7 s each on wide scopes).
+    // Results are still appended in Easy → Moderate → Tough order.
+    const levelDocs = await Promise.all(DIFFICULTY_LEVELS.map((level) =>
+      sampleTier({ $in: levelTiers[level] }, levelTargets[level], [])));
+    for (const docs of levelDocs) {
       docs.forEach((doc) => {
         const idStr = String(doc._id || doc.id);
         if (!collectedIds.has(idStr)) {

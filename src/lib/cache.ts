@@ -182,9 +182,25 @@ export async function cached<T>(
     return existing;
   }
 
-  const freshData = await fetcher();
-  if (freshData !== null && freshData !== undefined) {
-    await setCache(key, freshData, ttlSeconds);
+  // Concurrent misses for the same key share one fetch instead of each
+  // running the same database query (the UI often fires identical requests
+  // back to back while filters settle).
+  const pending = inFlight.get(key) as Promise<T> | undefined;
+  if (pending) return pending;
+
+  const request = (async () => {
+    const freshData = await fetcher();
+    if (freshData !== null && freshData !== undefined) {
+      await setCache(key, freshData, ttlSeconds);
+    }
+    return freshData;
+  })();
+  inFlight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    inFlight.delete(key);
   }
-  return freshData;
 }
+
+const inFlight = new Map<string, Promise<unknown>>();
